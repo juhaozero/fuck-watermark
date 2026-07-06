@@ -4,9 +4,9 @@ import (
 	"net/url"
 	"strings"
 
-	"short_videos/internal/config"
-	"short_videos/internal/httputil"
-	"short_videos/internal/parser"
+	"fuck-watermark/internal/config"
+	"fuck-watermark/internal/httputil"
+	"fuck-watermark/internal/parser"
 )
 
 // Descriptor 描述一个可注册的平台解析器。

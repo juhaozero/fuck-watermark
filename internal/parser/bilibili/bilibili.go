@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/url"
 	"strings"
 	"time"
 
-	"short_videos/internal/endpoints"
-	"short_videos/internal/httputil"
-	"short_videos/internal/model"
-	"short_videos/internal/parser"
+	"fuck-watermark/internal/endpoints"
+	"fuck-watermark/internal/httputil"
+	"fuck-watermark/internal/model"
+	"fuck-watermark/internal/parser"
 )
 
 type Parser struct {
@@ -43,14 +44,17 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	u := cleanURL(rawURL)
 	bvid, err := p.extractBVID(ctx, u)
 	if err != nil || bvid == "" {
+		log.Printf("[bilibili] extract bvid failed url=%q err=%v", u, err)
 		return model.Fail(400, "视频链接好像不太对！")
 	}
+	log.Printf("[bilibili] bvid=%s url=%q", bvid, u)
 
 	viewBody, err := p.client.Get(ctx, endpoints.BilibiliViewAPI+"?bvid="+bvid, req.Cookie, map[string]string{
 		"Content-Type": "application/json;charset=UTF-8",
 		"User-Agent":   p.ua,
 	})
 	if err != nil {
+		log.Printf("[bilibili] view api request failed bvid=%s err=%v", bvid, err)
 		return model.Fail(500, "请求B站接口失败")
 	}
 
@@ -72,8 +76,10 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 		} `json:"data"`
 	}
 	if json.Unmarshal(viewBody, &viewResp) != nil || viewResp.Code != 0 {
+		log.Printf("[bilibili] view api parse failed bvid=%s api_code=%d body=%q", bvid, viewResp.Code, truncate(string(viewBody), 256))
 		return model.Fail(404, "解析失败！")
 	}
+	log.Printf("[bilibili] view api ok bvid=%s title=%q pages=%d", bvid, viewResp.Data.Title, len(viewResp.Data.Pages))
 
 	var parts []videoPart
 	for i, page := range viewResp.Data.Pages {
@@ -86,6 +92,7 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 			"User-Agent":   p.ua,
 		})
 		if err != nil {
+			log.Printf("[bilibili] playurl request failed bvid=%s cid=%d index=%d err=%v", bvid, page.Cid, i+1, err)
 			continue
 		}
 
@@ -97,6 +104,7 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 			} `json:"data"`
 		}
 		if json.Unmarshal(playBody, &playResp) != nil || len(playResp.Data.Durl) == 0 {
+			log.Printf("[bilibili] playurl parse failed bvid=%s cid=%d index=%d body=%q", bvid, page.Cid, i+1, truncate(string(playBody), 256))
 			continue
 		}
 
@@ -120,8 +128,10 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	}
 
 	if len(parts) == 0 {
+		log.Printf("[bilibili] no playable parts bvid=%s total_pages=%d", bvid, len(viewResp.Data.Pages))
 		return model.Fail(404, "解析失败！")
 	}
+	log.Printf("[bilibili] parse ok bvid=%s parts=%d", bvid, len(parts))
 
 	modelParts := make([]model.VideoPart, len(parts))
 	for i, part := range parts {
@@ -154,13 +164,16 @@ func (p *Parser) extractBVID(ctx context.Context, rawURL string) (string, error)
 	}
 
 	path := strings.TrimRight(parsed.Path, "/")
-	host := parsed.Host
+	host := parsed.Hostname()
 
-	if host == "b23.tv" {
+	if host == "b23.tv" || strings.HasSuffix(host, ".b23.tv") {
+		log.Printf("[bilibili] resolving short url=%q host=%q", rawURL, host)
 		final, err := p.client.GetFinalURL(ctx, rawURL)
 		if err != nil {
+			log.Printf("[bilibili] short url resolve failed url=%q err=%v", rawURL, err)
 			return "", err
 		}
+		log.Printf("[bilibili] short url resolved url=%q final=%q", rawURL, final)
 		parsed, err = url.Parse(final)
 		if err != nil {
 			return "", err
@@ -169,6 +182,7 @@ func (p *Parser) extractBVID(ctx context.Context, rawURL string) (string, error)
 	}
 
 	if !strings.Contains(path, "/video/") {
+		log.Printf("[bilibili] not a video path url=%q path=%q", rawURL, path)
 		return "", fmt.Errorf("not a video path")
 	}
 	return strings.TrimPrefix(path, "/video/"), nil
@@ -191,4 +205,11 @@ func formatDuration(seconds int) string {
 	}
 	t := time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(seconds) * time.Second)
 	return t.Format("15:04:05")
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }

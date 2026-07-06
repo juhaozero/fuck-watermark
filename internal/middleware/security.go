@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"short_videos/internal/config"
-	"short_videos/internal/model"
+	"fuck-watermark/internal/config"
+	"fuck-watermark/internal/model"
 )
 
 func APIKeyAuth(apiKey string) gin.HandlerFunc {

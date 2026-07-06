@@ -4,8 +4,8 @@ import (
 	"flag"
 	"log"
 
-	"short_videos/internal/config"
-	"short_videos/internal/server"
+	"fuck-watermark/internal/config"
+	"fuck-watermark/internal/server"
 )
 
 func main() {

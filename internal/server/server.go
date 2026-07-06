@@ -6,11 +6,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"short_videos/internal/config"
-	"short_videos/internal/handler"
-	"short_videos/internal/httputil"
-	"short_videos/internal/middleware"
-	"short_videos/internal/platform"
+	"fuck-watermark/internal/config"
+	"fuck-watermark/internal/handler"
+	"fuck-watermark/internal/httputil"
+	"fuck-watermark/internal/middleware"
+	"fuck-watermark/internal/platform"
 )
 
 type Server struct {

@@ -9,10 +9,10 @@ import (
 	"regexp"
 	"strings"
 
-	"short_videos/internal/endpoints"
-	"short_videos/internal/httputil"
-	"short_videos/internal/model"
-	"short_videos/internal/parser"
+	"fuck-watermark/internal/endpoints"
+	"fuck-watermark/internal/httputil"
+	"fuck-watermark/internal/model"
+	"fuck-watermark/internal/parser"
 )
 
 var tvPathPattern = regexp.MustCompile(`weibo\.com/tv/(show|v)/([^?&]+)`)
@@ -156,12 +156,12 @@ func formatVideoInfo(info map[string]any, proxyBase string) *model.VideoData {
 	)
 	data.Cover = wrapURL(str(info["cover_image"]), proxyBase)
 	data.Stats = &model.Stats{
-		PlayCount:       info["play_count"],
-		RepostCount:     info["reposts_count"],
-		CommentCount:    info["comments_count"],
-		AttitudeCount:   info["attitudes_count"],
-		IPInfo:          info["ip_info_str"],
-		PublishedAt:     info["date"],
+		PlayCount:     info["play_count"],
+		RepostCount:   info["reposts_count"],
+		CommentCount:  info["comments_count"],
+		AttitudeCount: info["attitudes_count"],
+		IPInfo:        info["ip_info_str"],
+		PublishedAt:   info["date"],
 	}
 
 	return data

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -76,12 +77,14 @@ func (c *Client) Do(ctx context.Context, url string, opts RequestOptions) ([]byt
 
 	resp, err := client.Do(req)
 	if err != nil {
+		log.Printf("[http] request failed method=%s url=%q err=%v", method, url, err)
 		return nil, "", err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		log.Printf("[http] read body failed method=%s url=%q status=%d err=%v", method, url, resp.StatusCode, err)
 		return nil, "", err
 	}
 
@@ -91,6 +94,7 @@ func (c *Client) Do(ctx context.Context, url string, opts RequestOptions) ([]byt
 	}
 
 	if resp.StatusCode >= 400 && !opts.NoRedirect {
+		log.Printf("[http] bad status method=%s url=%q status=%d final_url=%q body=%q", method, url, resp.StatusCode, finalURL, truncateBody(body))
 		return body, finalURL, fmt.Errorf("http status %d", resp.StatusCode)
 	}
 
@@ -116,12 +120,18 @@ func (c *Client) GetFinalURL(ctx context.Context, url string) (string, error) {
 		},
 	})
 	if err != nil {
+		log.Printf("[http] head redirect failed url=%q err=%v, fallback to GET", url, err)
 		_, finalURL, err = c.Do(ctx, url, RequestOptions{
 			Method: http.MethodGet,
 			Headers: map[string]string{
 				"User-Agent": DefaultUserAgent,
 			},
 		})
+	}
+	if err != nil {
+		log.Printf("[http] get final url failed url=%q err=%v", url, err)
+	} else {
+		log.Printf("[http] get final url ok url=%q final=%q", url, finalURL)
 	}
 	return finalURL, err
 }
@@ -171,4 +181,12 @@ func (c *Client) HeadRedirect(ctx context.Context, rawURL string, headers map[st
 		return resp.Request.URL.String(), nil
 	}
 	return rawURL, nil
+}
+
+func truncateBody(body []byte) string {
+	const max = 256
+	if len(body) <= max {
+		return string(body)
+	}
+	return string(body[:max]) + "..."
 }

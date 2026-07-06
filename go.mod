@@ -1,4 +1,4 @@
-module short_videos
+module fuck-watermark
 
 go 1.25.0
 

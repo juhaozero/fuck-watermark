@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"short_videos/internal/config"
-	"short_videos/internal/httputil"
-	"short_videos/internal/model"
-	"short_videos/internal/parser"
+	"fuck-watermark/internal/config"
+	"fuck-watermark/internal/httputil"
+	"fuck-watermark/internal/model"
+	"fuck-watermark/internal/parser"
 )
 
 type stubParser struct {

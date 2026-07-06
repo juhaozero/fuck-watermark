@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"short_videos/internal/config"
+	"fuck-watermark/internal/config"
 )
 
 type ipRateLimiter struct {

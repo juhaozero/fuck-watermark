@@ -3,7 +3,7 @@ package parser
 import (
 	"context"
 
-	"short_videos/internal/model"
+	"fuck-watermark/internal/model"
 )
 
 // Request 单次解析请求参数。

@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"short_videos/internal/httputil"
-	"short_videos/internal/model"
-	"short_videos/internal/parser"
+	"fuck-watermark/internal/httputil"
+	"fuck-watermark/internal/model"
+	"fuck-watermark/internal/parser"
 )
 
 var (
