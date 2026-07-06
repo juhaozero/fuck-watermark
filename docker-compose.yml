@@ -1,9 +1,6 @@
 services:
   fuck-watermark:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: fuck-watermark:latest
+    image: ghcr.io/juhaozero/fuck-watermark:latest
     container_name: fuck-watermark
     restart: unless-stopped
     ports:

@@ -1,17 +1,7 @@
 [server]
-addr = 9000
+addr = 8080
 # HTTP 上游请求超时（秒）
 request_timeout = 15
-
-[cookies]
-# 各平台 Cookie（可选，配置后可提高解析成功率）
-douyin = ""
-kuaishou = ""
-xiaohongshu = ""
-bilibili = ""
-toutiao = ""
-weibo = ""
-doubao = ""
 
 [weibo]
 # 微博视频代理基址（可选，防 403），例如 "https://svproxy.example.com"
@@ -22,8 +12,8 @@ proxy_base = ""
 api_key = ""
 # CORS 允许来源，"*" 表示任意来源
 allow_origins = ["*"]
-# 请求体大小上限（字节）
-max_body_bytes = 4096
+# 请求体大小上限（字节），含 cookie 字段时需适当增大
+max_body_bytes = 16384
 
 [rate_limit]
 # 是否启用按 IP 限流（仅作用于 /api/*）

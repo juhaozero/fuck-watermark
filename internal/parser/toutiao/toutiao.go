@@ -10,6 +10,7 @@ import (
 	"short_videos/internal/endpoints"
 	"short_videos/internal/httputil"
 	"short_videos/internal/model"
+	"short_videos/internal/parser"
 )
 
 var (
@@ -19,16 +20,16 @@ var (
 
 type Parser struct {
 	client *httputil.Client
-	cookie string
 }
 
-func New(client *httputil.Client, cookie string) *Parser {
-	return &Parser{client: client, cookie: cookie}
+func New(client *httputil.Client) *Parser {
+	return &Parser{client: client}
 }
 
-func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
+func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
+	rawURL := req.URL
 	if strings.TrimSpace(rawURL) == "" {
-		return model.Fail(201, "url为空")
+		return model.Fail(400, "url为空")
 	}
 
 	id, err := p.extractID(ctx, rawURL)
@@ -36,12 +37,7 @@ func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
 		return model.Fail(400, "无法解析视频 ID")
 	}
 
-	cookie := p.cookie
-	if cookie == "" {
-		cookie = "自行更新"
-	}
-
-	body, err := p.client.Get(ctx, endpoints.ToutiaoVideoPage+id, cookie, map[string]string{
+	body, err := p.client.Get(ctx, endpoints.ToutiaoVideoPage+id, req.Cookie, map[string]string{
 		"User-Agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36",
 	})
 	if err != nil {

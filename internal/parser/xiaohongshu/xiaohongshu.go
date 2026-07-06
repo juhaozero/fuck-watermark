@@ -9,6 +9,7 @@ import (
 
 	"short_videos/internal/httputil"
 	"short_videos/internal/model"
+	"short_videos/internal/parser"
 )
 
 var (
@@ -24,14 +25,14 @@ var (
 
 type Parser struct {
 	client *httputil.Client
-	cookie string
 }
 
-func New(client *httputil.Client, cookie string) *Parser {
-	return &Parser{client: client, cookie: cookie}
+func New(client *httputil.Client) *Parser {
+	return &Parser{client: client}
 }
 
-func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
+func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
+	rawURL := req.URL
 	if strings.TrimSpace(rawURL) == "" {
 		return model.Fail(400, "请输入小红书链接")
 	}
@@ -53,14 +54,14 @@ func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
 		return model.Fail(400, "链接格式错误，无法提取ID。处理后的链接: "+u)
 	}
 
-	body, err := p.client.Get(ctx, u, p.cookie, nil)
+	body, err := p.client.Get(ctx, u, req.Cookie, nil)
 	if err != nil {
 		return model.Fail(500, "请求失败")
 	}
 
 	data := extractJSON(string(body), id)
 	if data == nil {
-		body, err = p.client.Get(ctx, u, p.cookie, map[string]string{
+		body, err = p.client.Get(ctx, u, req.Cookie, map[string]string{
 			"User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36",
 		})
 		if err == nil {
@@ -76,7 +77,7 @@ func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
 		if token != "" {
 			apiURL := "https://www.xiaohongshu.com/discovery/item/" + id +
 				"?app_platform=android&ignoreEngage=true&app_version=8.69.5&share_from_user_hidden=true&xsec_source=app_share&type=video&xsec_token=" + token
-			apiBody, err := p.client.Get(ctx, apiURL, p.cookie, nil)
+			apiBody, err := p.client.Get(ctx, apiURL, req.Cookie, nil)
 			if err == nil {
 				data = extractJSON(string(apiBody), id)
 			}

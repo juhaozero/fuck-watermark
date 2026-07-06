@@ -11,20 +11,21 @@ import (
 	"short_videos/internal/endpoints"
 	"short_videos/internal/httputil"
 	"short_videos/internal/model"
+	"short_videos/internal/parser"
 )
 
 const doubaoUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
 
 type Parser struct {
 	client *httputil.Client
-	cookie string
 }
 
-func New(client *httputil.Client, cookie string) *Parser {
-	return &Parser{client: client, cookie: cookie}
+func New(client *httputil.Client) *Parser {
+	return &Parser{client: client}
 }
 
-func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
+func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
+	rawURL := req.URL
 	if strings.TrimSpace(rawURL) == "" {
 		return model.Fail(400, "请输入豆包视频链接")
 	}
@@ -41,7 +42,7 @@ func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
 		return model.Fail(400, "无法从链接中提取必要参数")
 	}
 
-	result, err := p.requestAPI(ctx, params)
+	result, err := p.requestAPI(ctx, params, req.Cookie)
 	if err != nil {
 		return model.Fail(500, "解析失败: "+err.Error())
 	}
@@ -116,7 +117,7 @@ func extractParams(rawURL string) map[string]string {
 	return out
 }
 
-func (p *Parser) requestAPI(ctx context.Context, params map[string]string) (map[string]any, error) {
+func (p *Parser) requestAPI(ctx context.Context, params map[string]string, cookie string) (map[string]any, error) {
 	postBody, _ := json.Marshal(map[string]string{
 		"share_id":    params["share_id"],
 		"vid":         params["video_id"],
@@ -128,7 +129,6 @@ func (p *Parser) requestAPI(ctx context.Context, params map[string]string) (map[
 		params["share_id"], params["video_id"],
 	)
 
-	cookie := p.cookie
 	if cookie == "" {
 		cookie = "i18next=zh-CN"
 	}

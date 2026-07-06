@@ -12,6 +12,7 @@ import (
 	"short_videos/internal/endpoints"
 	"short_videos/internal/httputil"
 	"short_videos/internal/model"
+	"short_videos/internal/parser"
 )
 
 var tvPathPattern = regexp.MustCompile(`weibo\.com/tv/(show|v)/([^?&]+)`)
@@ -20,15 +21,15 @@ const weiboUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 
 type Parser struct {
 	client    *httputil.Client
-	cookie    string
 	proxyBase string
 }
 
-func New(client *httputil.Client, cookie, proxyBase string) *Parser {
-	return &Parser{client: client, cookie: cookie, proxyBase: proxyBase}
+func New(client *httputil.Client, proxyBase string) *Parser {
+	return &Parser{client: client, proxyBase: proxyBase}
 }
 
-func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
+func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
+	rawURL := req.URL
 	if strings.TrimSpace(rawURL) == "" {
 		return model.Fail(400, "参数url不能为空")
 	}
@@ -38,7 +39,7 @@ func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
 		return model.Fail(404, fmt.Sprintf("无法从URL中提取视频ID: %s", rawURL))
 	}
 
-	return p.fetchVideoInfo(ctx, videoID)
+	return p.fetchVideoInfo(ctx, videoID, req.Cookie)
 }
 
 func (p *Parser) extractVideoID(ctx context.Context, rawURL string) (string, error) {
@@ -68,7 +69,7 @@ func (p *Parser) extractVideoID(ctx context.Context, rawURL string) (string, err
 	return "", nil
 }
 
-func (p *Parser) fetchVideoInfo(ctx context.Context, videoID string) model.Response {
+func (p *Parser) fetchVideoInfo(ctx context.Context, videoID, cookie string) model.Response {
 	pagePath := "/tv/show/" + videoID
 	apiURL := endpoints.WeiboTVAPI + "?page=" + url.QueryEscape(pagePath)
 
@@ -78,7 +79,7 @@ func (p *Parser) fetchVideoInfo(ctx context.Context, videoID string) model.Respo
 	payloadJSON, _ := json.Marshal(payload)
 	form := "data=" + url.QueryEscape(string(payloadJSON))
 
-	body, err := p.client.Post(ctx, apiURL, strings.NewReader(form), p.cookie, map[string]string{
+	body, err := p.client.Post(ctx, apiURL, strings.NewReader(form), cookie, map[string]string{
 		"Content-Type": "application/x-www-form-urlencoded",
 		"Referer":      endpoints.WeiboReferer,
 		"User-Agent":   weiboUA,

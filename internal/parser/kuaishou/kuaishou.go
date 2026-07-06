@@ -8,6 +8,7 @@ import (
 
 	"short_videos/internal/httputil"
 	"short_videos/internal/model"
+	"short_videos/internal/parser"
 )
 
 var (
@@ -22,14 +23,14 @@ var (
 
 type Parser struct {
 	client *httputil.Client
-	cookie string
 }
 
-func New(client *httputil.Client, cookie string) *Parser {
-	return &Parser{client: client, cookie: cookie}
+func New(client *httputil.Client) *Parser {
+	return &Parser{client: client}
 }
 
-func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
+func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
+	rawURL := req.URL
 	if strings.TrimSpace(rawURL) == "" {
 		return model.Fail(400, "请输入快手链接")
 	}
@@ -39,7 +40,7 @@ func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
 		return model.Fail(400, "无法获取有效链接")
 	}
 
-	page, err := p.client.Get(ctx, redirectURL, p.cookie, map[string]string{
+	page, err := p.client.Get(ctx, redirectURL, req.Cookie, map[string]string{
 		"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 	})
 	if err != nil {

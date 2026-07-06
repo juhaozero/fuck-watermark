@@ -11,18 +11,17 @@ import (
 	"short_videos/internal/endpoints"
 	"short_videos/internal/httputil"
 	"short_videos/internal/model"
+	"short_videos/internal/parser"
 )
 
 type Parser struct {
 	client *httputil.Client
-	cookie string
 	ua     string
 }
 
-func New(client *httputil.Client, cookie string) *Parser {
+func New(client *httputil.Client) *Parser {
 	return &Parser{
 		client: client,
-		cookie: cookie,
 		ua:     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36",
 	}
 }
@@ -35,7 +34,8 @@ type videoPart struct {
 	Index          int    `json:"index"`
 }
 
-func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
+func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
+	rawURL := req.URL
 	if strings.TrimSpace(rawURL) == "" {
 		return model.Fail(400, "链接不能为空！")
 	}
@@ -46,7 +46,7 @@ func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
 		return model.Fail(400, "视频链接好像不太对！")
 	}
 
-	viewBody, err := p.client.Get(ctx, endpoints.BilibiliViewAPI+"?bvid="+bvid, p.cookie, map[string]string{
+	viewBody, err := p.client.Get(ctx, endpoints.BilibiliViewAPI+"?bvid="+bvid, req.Cookie, map[string]string{
 		"Content-Type": "application/json;charset=UTF-8",
 		"User-Agent":   p.ua,
 	})
@@ -81,7 +81,7 @@ func (p *Parser) Parse(ctx context.Context, rawURL string) model.Response {
 			endpoints.BilibiliPlayURLAPI+"?otype=json&fnver=0&fnval=3&player=3&qn=112&bvid=%s&cid=%d&platform=html5&high_quality=1",
 			bvid, page.Cid,
 		)
-		playBody, err := p.client.Get(ctx, playURL, p.cookie, map[string]string{
+		playBody, err := p.client.Get(ctx, playURL, req.Cookie, map[string]string{
 			"Content-Type": "application/json;charset=UTF-8",
 			"User-Agent":   p.ua,
 		})

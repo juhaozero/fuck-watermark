@@ -15,7 +15,7 @@ type stubParser struct {
 	name string
 }
 
-func (s stubParser) Parse(_ context.Context, _ string) model.Response {
+func (s stubParser) Parse(_ context.Context, _ parser.Request) model.Response {
 	return model.OK("ok", model.NewVideoData(s.name, model.MediaTypeVideo))
 }
 

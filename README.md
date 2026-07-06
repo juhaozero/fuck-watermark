@@ -21,7 +21,7 @@
 
 ```bash
 cp config.toml.example config.toml
-# 按需编辑 config.toml（Cookie 等）
+# 按需编辑 config.toml（端口、鉴权等）
 go mod tidy
 go run ./cmd/server
 ```
@@ -87,7 +87,15 @@ GET /api/weibo?url=https://weibo.com/tv/show/xxxx
 GET /api/doubao?url=https://www.doubao.com/video-sharing?share_id=xxx&video_id=xxx
 ```
 
-支持 `GET`、`POST`（表单或 JSON `{"url":"..."}`）。
+支持 `GET`、`POST`（表单或 JSON）。除 `url` 外，可传 `cookie` 作为各平台登录态（可选，提高解析成功率）。
+
+```http
+GET /api/douyin?url=https://v.douyin.com/xxxx/&cookie=your_platform_cookie
+POST /api/parse
+Content-Type: application/json
+
+{"url":"https://v.douyin.com/xxxx/","cookie":"your_platform_cookie"}
+```
 
 ### 响应示例
 
@@ -163,15 +171,6 @@ go run ./cmd/server -config /path/to/config.toml
 addr = 8080
 request_timeout = 15
 
-[cookies]
-douyin = ""
-kuaishou = ""
-xiaohongshu = ""
-bilibili = ""
-toutiao = ""
-weibo = ""
-doubao = ""
-
 [weibo]
 proxy_base = ""
 
@@ -190,11 +189,10 @@ burst = 10
 |--------|--------|------|
 | `server.addr` | `8080` | 服务监听端口 |
 | `server.request_timeout` | `15` | 上游请求超时（秒） |
-| `cookies.*` | 空 | 各平台 Cookie |
 | `weibo.proxy_base` | 空 | 微博视频代理基址 |
 | `security.api_key` | 空 | API 密钥；配置后 `/api/*` 需携带 `X-API-Key` 或 `Authorization: Bearer` |
 | `security.allow_origins` | `["*"]` | CORS 允许来源 |
-| `security.max_body_bytes` | `4096` | 请求体大小上限 |
+| `security.max_body_bytes` | `16384` | 请求体大小上限（含 cookie 字段） |
 | `rate_limit.enabled` | `true` | 是否启用 IP 限流 |
 | `rate_limit.requests_per_minute` | `60` | 每 IP 每分钟请求数 |
 | `rate_limit.burst` | `10` | 突发请求上限 |

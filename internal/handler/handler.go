@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"short_videos/internal/model"
+	"short_videos/internal/parser"
 	"short_videos/internal/platform"
 	"short_videos/internal/urlutil"
 )
@@ -25,27 +26,25 @@ func (h *Handler) Health(c *gin.Context) {
 	})
 }
 
-// ParseAuto 自动解析链接
 func (h *Handler) ParseAuto(c *gin.Context) {
-	rawURL, err := readURLParam(c)
+	req, err := readParseRequest(c)
 	if err != nil {
 		c.JSON(http.StatusOK, model.Fail(400, err.Error()))
 		return
 	}
 
-	p, ok := h.registry.Match(rawURL)
+	p, ok := h.registry.Match(req.URL)
 	if !ok {
 		c.JSON(http.StatusOK, model.Fail(400, "暂不支持该平台链接"))
 		return
 	}
 
-	c.JSON(http.StatusOK, p.Parser.Parse(c.Request.Context(), rawURL))
+	c.JSON(http.StatusOK, p.Parser.Parse(c.Request.Context(), req))
 }
 
-// ParsePlatform 解析指定平台链接
 func (h *Handler) ParsePlatform(name string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		rawURL, err := readURLParam(c)
+		req, err := readParseRequest(c)
 		if err != nil {
 			c.JSON(http.StatusOK, model.Fail(400, err.Error()))
 			return
@@ -57,32 +56,54 @@ func (h *Handler) ParsePlatform(name string) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, p.Parser.Parse(c.Request.Context(), rawURL))
+		c.JSON(http.StatusOK, p.Parser.Parse(c.Request.Context(), req))
 	}
 }
 
-// readURLParam 读取URL参数，并进行校验
-func readURLParam(c *gin.Context) (string, error) {
-	rawURL := extractURLParam(c)
-	if err := urlutil.ValidateParseURL(rawURL); err != nil {
-		return "", err
-	}
-	return rawURL, nil
+type parseInput struct {
+	URL    string
+	Cookie string
 }
 
-// extractURLParam 提取URL参数，支持GET、POST、JSON三种方式
-func extractURLParam(c *gin.Context) string {
+func readParseRequest(c *gin.Context) (parser.Request, error) {
+	in := extractInput(c)
+	if err := urlutil.ValidateParseURL(in.URL); err != nil {
+		return parser.Request{}, err
+	}
+	return parser.Request{URL: in.URL, Cookie: in.Cookie}, nil
+}
+
+func extractInput(c *gin.Context) parseInput {
+	var in parseInput
+
 	if u := c.Query("url"); u != "" {
-		return u
+		in.URL = u
 	}
-	if u := c.PostForm("url"); u != "" {
-		return u
+	if ck := c.Query("cookie"); ck != "" {
+		in.Cookie = ck
 	}
-	var body struct {
-		URL string `json:"url"`
+
+	if in.URL == "" {
+		in.URL = c.PostForm("url")
 	}
-	if c.ShouldBindJSON(&body) == nil && body.URL != "" {
-		return body.URL
+	if in.Cookie == "" {
+		in.Cookie = c.PostForm("cookie")
 	}
-	return ""
+
+	if in.URL == "" || in.Cookie == "" {
+		var body struct {
+			URL    string `json:"url"`
+			Cookie string `json:"cookie"`
+		}
+		if c.ShouldBindJSON(&body) == nil {
+			if in.URL == "" {
+				in.URL = body.URL
+			}
+			if in.Cookie == "" {
+				in.Cookie = body.Cookie
+			}
+		}
+	}
+
+	return in
 }
