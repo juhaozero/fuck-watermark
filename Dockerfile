@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /src
+
+ENV GOPROXY=https://goproxy.io,direct
 
 RUN apk add --no-cache ca-certificates git
 
