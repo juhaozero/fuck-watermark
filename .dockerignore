@@ -1,0 +1,6 @@
+short_videos
+short_videos.exe
+*.md
+config.toml
+.env
+.env.*
