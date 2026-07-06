@@ -110,30 +110,41 @@ func (c *Client) Get(ctx context.Context, url string, cookie string, headers map
 	return body, err
 }
 
-// GetFinalURL 获取最终URL
-func (c *Client) GetFinalURL(ctx context.Context, url string) (string, error) {
+// GetFinalURL 跟随重定向链，返回最终 URL。
+// 部分站点（如 B 站）落地页会返回 412/403 等风控状态，但重定向 URL 仍然有效。
+func (c *Client) GetFinalURL(ctx context.Context, url string, headers ...map[string]string) (string, error) {
+	h := map[string]string{"User-Agent": DefaultUserAgent}
+	if len(headers) > 0 && headers[0] != nil {
+		for k, v := range headers[0] {
+			h[k] = v
+		}
+	}
+
 	_, finalURL, err := c.Do(ctx, url, RequestOptions{
-		Method:     http.MethodHead,
-		NoRedirect: false,
-		Headers: map[string]string{
-			"User-Agent": DefaultUserAgent,
-		},
+		Method:  http.MethodHead,
+		Headers: h,
 	})
-	if err != nil {
+	if err != nil && !redirectResolved(url, finalURL) {
 		log.Printf("[http] head redirect failed url=%q err=%v, fallback to GET", url, err)
 		_, finalURL, err = c.Do(ctx, url, RequestOptions{
-			Method: http.MethodGet,
-			Headers: map[string]string{
-				"User-Agent": DefaultUserAgent,
-			},
+			Method:  http.MethodGet,
+			Headers: h,
 		})
+	}
+	if err != nil && redirectResolved(url, finalURL) {
+		log.Printf("[http] get final url ok after redirect url=%q final=%q (ignored err=%v)", url, finalURL, err)
+		return finalURL, nil
 	}
 	if err != nil {
 		log.Printf("[http] get final url failed url=%q err=%v", url, err)
-	} else {
-		log.Printf("[http] get final url ok url=%q final=%q", url, finalURL)
+		return finalURL, err
 	}
-	return finalURL, err
+	log.Printf("[http] get final url ok url=%q final=%q", url, finalURL)
+	return finalURL, nil
+}
+
+func redirectResolved(original, final string) bool {
+	return final != "" && final != original
 }
 
 func (c *Client) Post(ctx context.Context, url string, body io.Reader, cookie string, headers map[string]string) ([]byte, error) {

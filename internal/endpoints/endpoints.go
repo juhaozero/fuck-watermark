@@ -3,8 +3,10 @@ package endpoints
 // 各平台上游 API 与 CDN 基址常量，便于统一维护与扩展。
 
 const (
-	DouyinUserPageBase = "https://www.douyin.com/user/self"        // 抖音用户页基址
-	DouyinPlayBase     = "https://aweme.snssdk.com/aweme/v1/play/" // 抖音播放基址
+	DouyinUserPageBase   = "https://www.douyin.com/user/self"              // 抖音用户页（modal_id 方案）
+	DouyinIesShareBase   = "https://www.iesdouyin.com/share/video/"        // iesdouyin 分享页（No Cookie 方案）
+	DouyinAwemeDetailAPI = "https://www.douyin.com/aweme/v1/web/aweme/detail/"
+	DouyinPlayBase       = "https://aweme.snssdk.com/aweme/v1/play/" // 抖音播放基址
 
 	KuaishouCDNVideo = "http://tx2.a.yximgs.com/"   // 快手CDN视频基址
 	KuaishouCDNMusic = "http://txmov2.a.kwimgs.com" // 快手CDN音乐基址

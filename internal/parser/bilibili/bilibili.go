@@ -168,7 +168,13 @@ func (p *Parser) extractBVID(ctx context.Context, rawURL string) (string, error)
 
 	if host == "b23.tv" || strings.HasSuffix(host, ".b23.tv") {
 		log.Printf("[bilibili] resolving short url=%q host=%q", rawURL, host)
-		final, err := p.client.GetFinalURL(ctx, rawURL)
+		final, err := p.client.HeadRedirect(ctx, rawURL, map[string]string{
+			"User-Agent": p.ua,
+		})
+		if err != nil || final == "" || final == rawURL {
+			log.Printf("[bilibili] head redirect unavailable url=%q err=%v, fallback to GetFinalURL", rawURL, err)
+			final, err = p.client.GetFinalURL(ctx, rawURL)
+		}
 		if err != nil {
 			log.Printf("[bilibili] short url resolve failed url=%q err=%v", rawURL, err)
 			return "", err

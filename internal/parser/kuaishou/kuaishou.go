@@ -3,6 +3,7 @@ package kuaishou
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"regexp"
 	"strings"
 
@@ -10,6 +11,9 @@ import (
 	"fuck-watermark/internal/model"
 	"fuck-watermark/internal/parser"
 )
+
+// short_videos ksjx.php 使用 iPhone 移动 UA，桌面 UA 易触发风控
+const kuaishouUA = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1 Edg/122.0.0.0"
 
 var (
 	initStatePattern   = regexp.MustCompile(`window\.INIT_STATE\s*=\s*(.*?)</script>`)
@@ -29,36 +33,61 @@ func New(client *httputil.Client) *Parser {
 	return &Parser{client: client}
 }
 
+func kuaishouHTMLHeaders() map[string]string {
+	return map[string]string{
+		"User-Agent":                kuaishouUA,
+		"Accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+		"Accept-Language":           "zh-CN,zh;q=0.9",
+		"Sec-Fetch-Dest":            "document",
+		"Sec-Fetch-Mode":            "navigate",
+		"Sec-Fetch-Site":            "none",
+		"Sec-Fetch-User":            "?1",
+		"Upgrade-Insecure-Requests": "1",
+	}
+}
+
 func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	rawURL := req.URL
 	if strings.TrimSpace(rawURL) == "" {
 		return model.Fail(400, "请输入快手链接")
 	}
 
-	redirectURL, err := p.client.GetFinalURL(ctx, rawURL)
+	headers := kuaishouHTMLHeaders()
+	redirectURL, err := p.client.GetFinalURL(ctx, rawURL, headers)
 	if err != nil || redirectURL == "" {
+		log.Printf("[kuaishou] redirect failed url=%q err=%v", rawURL, err)
 		return model.Fail(400, "无法获取有效链接")
 	}
+	log.Printf("[kuaishou] resolved url=%q final=%q", rawURL, redirectURL)
 
-	page, err := p.client.Get(ctx, redirectURL, req.Cookie, map[string]string{
-		"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-	})
+	page, err := p.client.Get(ctx, redirectURL, req.Cookie, headers)
 	if err != nil {
+		log.Printf("[kuaishou] page request failed url=%q err=%v", redirectURL, err)
 		return model.Fail(500, "页面内容获取失败")
 	}
 
 	contentType, contentID := extractContentIDAndType(redirectURL)
 	if contentID == "" {
+		log.Printf("[kuaishou] unknown content type url=%q", redirectURL)
 		return model.Fail(400, "无法识别的链接类型")
 	}
+	log.Printf("[kuaishou] content_type=%s content_id=%s", contentType, contentID)
 
 	if result := extractFromInitState(string(page)); result != nil {
+		log.Printf("[kuaishou] parse ok source=init_state content_id=%s", contentID)
 		return *result
 	}
 	if result := extractFromApolloState(string(page), contentID, contentType); result != nil {
+		log.Printf("[kuaishou] parse ok source=apollo_state content_id=%s", contentID)
 		return *result
 	}
-	return model.Fail(404, "未找到有效媒体信息")
+
+	log.Printf("[kuaishou] parse failed content_id=%s has_cookie=%v", contentID, req.Cookie != "")
+	msg := "未找到有效媒体信息"
+	if req.Cookie == "" {
+		msg += "（建议传入 cookie 参数以提高成功率）"
+	}
+	return model.Fail(404, msg)
 }
 
 func extractContentIDAndType(u string) (string, string) {

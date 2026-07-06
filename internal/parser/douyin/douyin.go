@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/url"
 	"regexp"
 	"sort"
@@ -14,6 +15,12 @@ import (
 	"fuck-watermark/internal/httputil"
 	"fuck-watermark/internal/model"
 	"fuck-watermark/internal/parser"
+)
+
+const (
+	douyinUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	// iesdouyin 分享页需移动端 UA，桌面 UA 会返回 byted_acrawler 反爬页（见 short_videos No Cookie 方案）
+	douyinMobileUA = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1 Edg/122.0.0.0"
 )
 
 var (
@@ -51,23 +58,76 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 
 	id := extractID(u)
 	if id == "" {
+		log.Printf("[douyin] extract id failed url=%q resolved=%q", rawURL, u)
 		return model.Fail(400, "链接格式错误，无法提取ID。处理后的链接: "+u)
 	}
+	log.Printf("[douyin] aweme_id=%s url=%q", id, u)
 
-	apiURL := endpoints.DouyinUserPageBase + "?modal_id=" + id + "&showTab=like"
-	body, err := p.client.Get(ctx, apiURL, req.Cookie, map[string]string{
-		"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-	})
+	// 方案 1：iesdouyin 分享页 + _ROUTER_DATA（short_videos No Cookie 方案，需移动端 UA）
+	sharePage := endpoints.DouyinIesShareBase + id
+	if detail := p.fetchPageDetail(ctx, sharePage, req.Cookie, douyinMobileUA); detail != nil {
+		log.Printf("[douyin] parse ok aweme_id=%s source=iesdouyin", id)
+		return model.OK("解析成功", formatData(normalizeDetail(detail)))
+	}
+
+	// 方案 2：user/self?modal_id + RENDER_DATA（short_videos DouyinParser 主方案，通常需 cookie）
+	modalPage := endpoints.DouyinUserPageBase + "?modal_id=" + id + "&showTab=like"
+	if detail := p.fetchPageDetail(ctx, modalPage, req.Cookie, douyinUA); detail != nil {
+		log.Printf("[douyin] parse ok aweme_id=%s source=modal_page", id)
+		return model.OK("解析成功", formatData(normalizeDetail(detail)))
+	}
+
+	log.Printf("[douyin] parse failed aweme_id=%s", id)
+	return model.Fail(404, "解析失败，未找到有效内容（可尝试传入 cookie 参数）")
+}
+
+func douyinHTMLHeaders(referer, ua string) map[string]string {
+	return map[string]string{
+		"User-Agent":      ua,
+		"Referer":         referer,
+		"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+		"Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+	}
+}
+
+func (p *Parser) fetchPageDetail(ctx context.Context, pageURL, cookie, ua string) map[string]any {
+	referer := pageURL
+	if strings.Contains(pageURL, "iesdouyin.com") {
+		referer = "https://www.douyin.com/"
+	}
+	body, err := p.client.Get(ctx, pageURL, cookie, douyinHTMLHeaders(referer, ua))
 	if err != nil {
-		return model.Fail(500, "请求失败: "+err.Error())
+		log.Printf("[douyin] page request failed url=%q err=%v", pageURL, err)
+		return nil
 	}
-
-	detail := extractJSON(string(body))
+	html := string(body)
+	if strings.Contains(html, "byted_acrawler") || strings.Contains(html, "__ac_signature") {
+		log.Printf("[douyin] page anti-bot challenge url=%q", pageURL)
+		return nil
+	}
+	detail := extractJSON(html)
 	if detail == nil {
-		return model.Fail(404, "解析失败，未找到有效内容")
+		log.Printf("[douyin] page no render data url=%q body=%q", pageURL, truncate(html, 256))
 	}
+	return detail
+}
 
-	return model.OK("解析成功", formatData(detail))
+func normalizeDetail(detail map[string]any) map[string]any {
+	if video, ok := detail["video"].(map[string]any); ok {
+		if _, ok := video["bitRateList"]; !ok {
+			if br, ok := video["bit_rate"].([]any); ok {
+				video["bitRateList"] = br
+			}
+		}
+	}
+	return detail
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }
 
 // needsRedirect 判断是否需要重定向
@@ -143,8 +203,8 @@ func formatData(detail map[string]any) *model.VideoData {
 	result.Desc = desc
 	result.Author = model.AuthorOf(
 		firstStr(detail, "authorInfo", "nickname", "author", "nickname"),
-		firstStr(detail, "authorInfo", "uid", "author", "uid"),
-		firstURL(detail, "authorInfo", "avatarUri", "author", "avatar_thumb", "url_list"),
+		firstAuthorID(detail),
+		firstAuthorAvatar(detail),
 	)
 	// 提取音乐
 	result.Music = extractMusic(detail)
@@ -220,9 +280,9 @@ func extractMusic(detail map[string]any) *model.Music {
 // extractCover 提取封面
 func extractCover(detail map[string]any) string {
 	if video, ok := detail["video"].(map[string]any); ok {
-		for _, path := range []string{"originCover", "cover", "dynamicCover"} {
+		for _, path := range []string{"originCover", "origin_cover", "cover", "dynamicCover", "dynamic_cover"} {
 			if c, ok := video[path].(map[string]any); ok {
-				if u := firstURL(c, "urlList", "url_list"); u != "" {
+				if u := urlFromList(c); u != "" {
 					return u
 				}
 			}
@@ -232,7 +292,7 @@ func extractCover(detail map[string]any) string {
 		}
 	}
 	if cover, ok := detail["cover"].(map[string]any); ok {
-		if u := firstURL(cover, "url_list"); u != "" {
+		if u := urlFromList(cover); u != "" {
 			return u
 		}
 	}
@@ -272,7 +332,7 @@ func extractHighestQualityVideo(detail map[string]any) (string, []string) {
 			if len(urls) == 0 {
 				continue
 			}
-			br := int(num(rm["bitRate"]))
+			br := int(num(firstOfNum(rm, "bitRate", "bit_rate")))
 			items = append(items, item{bitRate: br, urls: urls})
 		}
 		sort.Slice(items, func(i, j int) bool {
@@ -301,16 +361,19 @@ func extractHighestQualityVideo(detail map[string]any) (string, []string) {
 		}
 	}
 
-	playAPI := str(video["playApi"])
-	if playAPI == "" {
-		if addr, ok := video["play_addr"].(map[string]any); ok {
-			if list, ok := addr["url_list"].([]any); ok && len(list) > 0 {
-				playAPI = str(list[0])
+	// iesdouyin 等来源常见 play_addr.url_list，优先于 playApi / snssdk 兜底
+	if urls := collectURLs(video); len(urls) > 0 {
+		main := pickBestURL(urls)
+		var backup []string
+		for _, u := range urls {
+			u = strings.ReplaceAll(normalizeV26(u), "playwm", "play")
+			if u != main && !contains(backup, u) {
+				backup = append(backup, u)
 			}
 		}
-	}
-	if playAPI != "" {
-		return strings.ReplaceAll(playAPI, "playwm", "play"), nil
+		if main != "" {
+			return strings.ReplaceAll(main, "playwm", "play"), backup
+		}
 	}
 
 	uri := str(video["uri"])
@@ -403,6 +466,15 @@ func num(v any) float64 {
 	return 0
 }
 
+func firstOfNum(m map[string]any, keys ...string) any {
+	for _, k := range keys {
+		if v, ok := m[k]; ok && v != nil {
+			return v
+		}
+	}
+	return nil
+}
+
 func firstOf(m map[string]any, keys ...string) string {
 	for _, k := range keys {
 		if s := str(m[k]); s != "" {
@@ -413,6 +485,23 @@ func firstOf(m map[string]any, keys ...string) string {
 }
 
 // firstStr 提取第一个字符串
+func firstAuthorID(detail map[string]any) string {
+	if id := firstStr(detail, "authorInfo", "uid", "author", "uid"); id != "" {
+		return id
+	}
+	return firstStr(detail, "authorInfo", "uid", "author", "unique_id")
+}
+
+func firstAuthorAvatar(detail map[string]any) string {
+	if u := firstURL(detail, "authorInfo", "avatarUri"); u != "" {
+		return u
+	}
+	if u := firstURL(detail, "author", "avatar_thumb", "url_list"); u != "" {
+		return u
+	}
+	return firstURL(detail, "author", "avatar_medium", "url_list")
+}
+
 func firstStr(m map[string]any, k1, f1, k2, f2 string) string {
 	if sub, ok := m[k1].(map[string]any); ok {
 		if s := str(sub[f1]); s != "" {
@@ -441,6 +530,18 @@ func firstURL(m map[string]any, keys ...string) string {
 			return ""
 		}
 		cur = cm[key]
+	}
+	return ""
+}
+
+// urlFromList 从同一对象读取 urlList 或 url_list（iesdouyin 为 snake_case）
+func urlFromList(m map[string]any) string {
+	for _, key := range []string{"urlList", "url_list"} {
+		if list, ok := m[key].([]any); ok && len(list) > 0 {
+			if u := str(list[0]); u != "" {
+				return u
+			}
+		}
 	}
 	return ""
 }
