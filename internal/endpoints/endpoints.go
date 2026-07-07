@@ -3,8 +3,8 @@ package endpoints
 // 各平台上游 API 与 CDN 基址常量，便于统一维护与扩展。
 
 const (
-	DouyinUserPageBase   = "https://www.douyin.com/user/self"              // 抖音用户页（modal_id 方案）
-	DouyinIesShareBase   = "https://www.iesdouyin.com/share/video/"        // iesdouyin 分享页（No Cookie 方案）
+	DouyinUserPageBase   = "https://www.douyin.com/user/self"       // 抖音用户页（modal_id 方案）
+	DouyinIesShareBase   = "https://www.iesdouyin.com/share/video/" // iesdouyin 分享页（No Cookie 方案）
 	DouyinAwemeDetailAPI = "https://www.douyin.com/aweme/v1/web/aweme/detail/"
 	DouyinPlayBase       = "https://aweme.snssdk.com/aweme/v1/play/" // 抖音播放基址
 
@@ -19,8 +19,6 @@ const (
 	XHSImageCDN = "https://sns-img-hw.xhscdn.com/"              // 小红书图片CDN基址
 	XHSVideoCDN = "http://sns-video-bd.xhscdn.com/"             // 小红书视频CDN基址
 	XHSCoverCDN = "https://ci.xiaohongshu.com/"                 // 小红书封面CDN基址
-
-	ToutiaoVideoPage = "https://www.toutiao.com/video/" // 头条视频页基址
 
 	WeiboTVAPI   = "https://weibo.com/tv/api/component" // 微博TVAPI
 	WeiboReferer = "https://weibo.com/"                 // 微博Referer

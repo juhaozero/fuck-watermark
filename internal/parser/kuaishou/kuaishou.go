@@ -12,7 +12,7 @@ import (
 	"fuck-watermark/internal/parser"
 )
 
-// short_videos ksjx.php 使用 iPhone 移动 UA，桌面 UA 易触发风控
+// ksjx.php 使用 iPhone 移动 UA，桌面 UA 易触发风控
 const kuaishouUA = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1 Edg/122.0.0.0"
 
 var (

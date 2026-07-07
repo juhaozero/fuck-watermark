@@ -11,8 +11,6 @@ import (
 
 	"fuck-watermark/internal/parser/kuaishou"
 
-	"fuck-watermark/internal/parser/toutiao"
-
 	"fuck-watermark/internal/parser/weibo"
 
 	"fuck-watermark/internal/parser/xiaohongshu"
@@ -80,21 +78,6 @@ func DefaultDescriptors() []Descriptor {
 			Factory: func(d Dependencies) parser.Parser {
 
 				return bilibili.New(d.Client)
-
-			},
-		},
-
-		{
-
-			Name: "toutiao",
-
-			Keywords: []string{"toutiao"},
-
-			HostSuffixes: []string{"toutiao.com"},
-
-			Factory: func(d Dependencies) parser.Parser {
-
-				return toutiao.New(d.Client)
 
 			},
 		},

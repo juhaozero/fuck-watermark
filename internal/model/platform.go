@@ -6,7 +6,6 @@ const (
 	PlatformKuaishou    = "kuaishou"
 	PlatformXiaohongshu = "xiaohongshu"
 	PlatformBilibili    = "bilibili"
-	PlatformToutiao     = "toutiao"
 	PlatformWeibo       = "weibo"
 	PlatformDoubao      = "doubao"
 )

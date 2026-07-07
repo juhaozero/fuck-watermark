@@ -19,7 +19,7 @@ import (
 
 const (
 	douyinUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-	// iesdouyin 分享页需移动端 UA，桌面 UA 会返回 byted_acrawler 反爬页（见 short_videos No Cookie 方案）
+	// iesdouyin 分享页需移动端 UA，桌面 UA 会返回 byted_acrawler 反爬页
 	douyinMobileUA = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1 Edg/122.0.0.0"
 )
 
@@ -63,14 +63,14 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	}
 	log.Printf("[douyin] aweme_id=%s url=%q", id, u)
 
-	// 方案 1：iesdouyin 分享页 + _ROUTER_DATA（short_videos No Cookie 方案，需移动端 UA）
+	// 方案 1：iesdouyin 分享页 + _ROUTER_DATA（需移动端 UA）
 	sharePage := endpoints.DouyinIesShareBase + id
 	if detail := p.fetchPageDetail(ctx, sharePage, req.Cookie, douyinMobileUA); detail != nil {
 		log.Printf("[douyin] parse ok aweme_id=%s source=iesdouyin", id)
 		return model.OK("解析成功", formatData(normalizeDetail(detail)))
 	}
 
-	// 方案 2：user/self?modal_id + RENDER_DATA（short_videos DouyinParser 主方案，通常需 cookie）
+	// 方案 2：user/self?modal_id + RENDER_DATA（通常需 cookie）
 	modalPage := endpoints.DouyinUserPageBase + "?modal_id=" + id + "&showTab=like"
 	if detail := p.fetchPageDetail(ctx, modalPage, req.Cookie, douyinUA); detail != nil {
 		log.Printf("[douyin] parse ok aweme_id=%s source=modal_page", id)

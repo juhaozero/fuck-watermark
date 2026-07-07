@@ -82,7 +82,6 @@ GET /api/douyin?url=https://v.douyin.com/xxxx/
 GET /api/kuaishou?url=https://v.kuaishou.com/xxxx
 GET /api/xiaohongshu?url=https://xhslink.com/xxxx
 GET /api/bilibili?url=https://www.bilibili.com/video/BVxxxx
-GET /api/toutiao?url=https://www.toutiao.com/video/xxxx
 GET /api/weibo?url=https://weibo.com/tv/show/xxxx
 GET /api/doubao?url=https://www.doubao.com/video-sharing?share_id=xxx&video_id=xxx
 ```
