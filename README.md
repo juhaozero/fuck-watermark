@@ -1,6 +1,6 @@
 # fuck-watermark
 
-基于 Gin 框架短视频去水印解析 API 服
+基于 Gin 框架短视频去水印解析 API 服务
 
 ## 支持平台
 
@@ -10,7 +10,6 @@
 | 快手 | `/api/kuaishou` | ✅ |
 | 小红书 | `/api/xiaohongshu` 或 `/api/xhsjx` | ✅ |
 | 哔哩哔哩 | `/api/bilibili` | ✅ |
-| 今日头条 | `/api/toutiao` | ✅ |
 | 微博 | `/api/weibo` | ✅ |
 | 豆包 AI 视频 | `/api/doubao` | ✅ |
 | 自动识别 | `/api/parse` | ✅ |
