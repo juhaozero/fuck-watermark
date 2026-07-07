@@ -49,6 +49,7 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	}
 	log.Printf("[bilibili] bvid=%s url=%q", bvid, u)
 
+	// 获取视频信息
 	viewBody, err := p.client.Get(ctx, endpoints.BilibiliViewAPI+"?bvid="+bvid, req.Cookie, map[string]string{
 		"Content-Type": "application/json;charset=UTF-8",
 		"User-Agent":   p.ua,
@@ -81,12 +82,14 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	}
 	log.Printf("[bilibili] view api ok bvid=%s title=%q pages=%d", bvid, viewResp.Data.Title, len(viewResp.Data.Pages))
 
+	// 获取视频分P信息
 	var parts []videoPart
 	for i, page := range viewResp.Data.Pages {
 		playURL := fmt.Sprintf(
 			endpoints.BilibiliPlayURLAPI+"?otype=json&fnver=0&fnval=3&player=3&qn=112&bvid=%s&cid=%d&platform=html5&high_quality=1",
 			bvid, page.Cid,
 		)
+		// 获取视频播放地址
 		playBody, err := p.client.Get(ctx, playURL, req.Cookie, map[string]string{
 			"Content-Type": "application/json;charset=UTF-8",
 			"User-Agent":   p.ua,
@@ -149,14 +152,15 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	data.Title = viewResp.Data.Title
 	data.Desc = viewResp.Data.Desc
 	data.Cover = viewResp.Data.Pic
-	data.URL = parts[0].URL
-	data.Duration = parts[0].Duration
+	data.URL = parts[0].URL           // 视频播放地址
+	data.Duration = parts[0].Duration // 视频时长
 	data.Author = model.AuthorOf(viewResp.Data.Owner.Name, "", viewResp.Data.Owner.Face)
 	data.Parts = modelParts
 
 	return model.OK("解析成功", data)
 }
 
+// extractBVID 提取B站视频ID
 func (p *Parser) extractBVID(ctx context.Context, rawURL string) (string, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
@@ -166,6 +170,7 @@ func (p *Parser) extractBVID(ctx context.Context, rawURL string) (string, error)
 	path := strings.TrimRight(parsed.Path, "/")
 	host := parsed.Hostname()
 
+	// 短链接处理
 	if host == "b23.tv" || strings.HasSuffix(host, ".b23.tv") {
 		log.Printf("[bilibili] resolving short url=%q host=%q", rawURL, host)
 		final, err := p.client.HeadRedirect(ctx, rawURL, map[string]string{
