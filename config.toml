@@ -1,7 +1,7 @@
 [server]
 addr = 9000
 # HTTP 上游请求超时（秒）
-request_timeout = 15
+request_timeout = 30
 
 
 # 微博视频代理基址（可选，防 403），例如 "https://svproxy.example.com"

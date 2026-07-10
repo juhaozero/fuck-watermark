@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"fuck-watermark/internal/httputil"
 	"fuck-watermark/internal/model"
 	"fuck-watermark/internal/parser"
 	"fuck-watermark/internal/platform"
@@ -14,10 +15,11 @@ import (
 
 type Handler struct {
 	registry *platform.Registry
+	client   *httputil.Client
 }
 
-func New(registry *platform.Registry) *Handler {
-	return &Handler{registry: registry}
+func New(registry *platform.Registry, client *httputil.Client) *Handler {
+	return &Handler{registry: registry, client: client}
 }
 
 func (h *Handler) Health(c *gin.Context) {

@@ -22,7 +22,7 @@ func New(cfg config.Config) (*Server, error) {
 	client := httputil.New(cfg.RequestTimeout)
 	deps := platform.Dependencies{Client: client, Config: cfg}
 	registry := platform.NewRegistry(platform.DefaultDescriptors(), deps)
-	h := handler.New(registry)
+	h := handler.New(registry, client)
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -45,6 +45,8 @@ func New(cfg config.Config) (*Server, error) {
 
 	api.GET("/parse", h.ParseAuto)
 	api.POST("/parse", h.ParseAuto)
+	// api.GET("/download", h.Download)
+	// api.HEAD("/download", h.Download)
 	for _, routeName := range registry.RouteNames() {
 		api.GET("/"+routeName, h.ParsePlatform(routeName))
 		api.POST("/"+routeName, h.ParsePlatform(routeName))

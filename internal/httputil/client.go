@@ -110,6 +110,43 @@ func (c *Client) Get(ctx context.Context, url string, cookie string, headers map
 	return body, err
 }
 
+// Open 发起 GET 并返回响应流，调用方须关闭 resp.Body。
+func (c *Client) Open(ctx context.Context, rawURL string, cookie string, headers map[string]string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	ua := DefaultUserAgent
+	for k, v := range headers {
+		if strings.EqualFold(k, "User-Agent") {
+			ua = v
+		}
+		req.Header.Set(k, v)
+	}
+
+	if req.Header.Get("User-Agent") == "" {
+		req.Header.Set("User-Agent", ua)
+	}
+	if cookie != "" {
+		req.Header.Set("Cookie", cookie)
+	}
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		log.Printf("[http] open failed url=%q err=%v", rawURL, err)
+		return nil, err
+	}
+	if resp.StatusCode >= 400 {
+		defer resp.Body.Close()
+		log.Printf("[http] open bad status url=%q status=%d", rawURL, resp.StatusCode)
+		return nil, fmt.Errorf("http status %d", resp.StatusCode)
+	}
+	return resp, nil
+}
+
 // GetFinalURL 跟随重定向链，返回最终 URL。
 // 部分站点（如 B 站）落地页会返回 412/403 等风控状态，但重定向 URL 仍然有效。
 func (c *Client) GetFinalURL(ctx context.Context, url string, headers ...map[string]string) (string, error) {
