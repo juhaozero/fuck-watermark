@@ -47,17 +47,11 @@ docker run -d \
 ### Docker Compose 部署（推荐）
 
 ```bash
+# 镜像
+ghcr.io/juhaozero/fuck-watermark:latest
+
 cp config.toml.example config.toml
 # 按需编辑 config.toml
-
-# 启动服务
-docker compose up -d --build
-
-# 查看日志
-docker compose logs -f
-
-# 停止服务
-docker compose down
 ```
 
 ## API 使用

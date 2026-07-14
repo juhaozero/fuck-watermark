@@ -7,6 +7,9 @@ request_timeout = 15
 # 微博视频代理基址（可选，防 403），例如 "https://svproxy.example.com"
 proxy_base = ""
 
+[douyin]
+cookie = ""
+
 [security]
 # API 访问密钥；留空则关闭鉴权（仅建议内网或开发环境）
 api_key = ""

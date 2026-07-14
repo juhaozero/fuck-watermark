@@ -30,7 +30,7 @@ func DefaultDescriptors() []Descriptor {
 
 			Factory: func(d Dependencies) parser.Parser {
 
-				return douyin.New(d.Client)
+				return douyin.New(d.Client, d.Config.DouyinCookie)
 
 			},
 		},

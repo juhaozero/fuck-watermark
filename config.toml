@@ -9,7 +9,8 @@ request_timeout = 30
 
 proxy_base = ""
 
-
+[douyin]
+cookie = "123xxx"
 
 [security]
 

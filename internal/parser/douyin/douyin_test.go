@@ -29,7 +29,7 @@ func TestParseDouyinVideoIntegration(t *testing.T) {
 	if os.Getenv("DOUYIN_INTEGRATION") == "" {
 		t.Skip("set DOUYIN_INTEGRATION=1 to run live test")
 	}
-	p := New(httputil.New(30 * time.Second))
+	p := New(httputil.New(30*time.Second), "")
 	resp := p.Parse(context.Background(), parser.Request{
 		URL: "https://www.douyin.com/video/7637471145263910179",
 	})

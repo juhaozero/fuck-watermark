@@ -36,10 +36,11 @@ var (
 
 type Parser struct {
 	client *httputil.Client
+	Cookie string
 }
 
-func New(client *httputil.Client) *Parser {
-	return &Parser{client: client}
+func New(client *httputil.Client, cookie string) *Parser {
+	return &Parser{client: client, Cookie: cookie}
 }
 
 func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
@@ -55,6 +56,9 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 			u = final
 		}
 	}
+	if req.Cookie == "" {
+		req.Cookie = p.Cookie
+	}
 
 	id := extractID(u)
 	if id == "" {
@@ -62,18 +66,18 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 		return model.Fail(400, "链接格式错误，无法提取ID。处理后的链接: "+u)
 	}
 	log.Printf("[douyin] aweme_id=%s url=%q", id, u)
-
-	// 方案 1：iesdouyin 分享页 + _ROUTER_DATA（需移动端 UA）
+	if req.Cookie != "" {
+		// 方案1：user/self?modal_id + RENDER_DATA（通常需 cookie）
+		modalPage := endpoints.DouyinUserPageBase + "?modal_id=" + id + "&showTab=like"
+		if detail := p.fetchPageDetail(ctx, modalPage, req.Cookie, douyinUA); detail != nil {
+			log.Printf("[douyin] parse ok aweme_id=%s source=modal_page ", id)
+			return model.OK("解析成功", formatData(normalizeDetail(detail)))
+		}
+	}
+	// 方案2：iesdouyin 分享页 + _ROUTER_DATA（需移动端 UA）
 	sharePage := endpoints.DouyinIesShareBase + id
 	if detail := p.fetchPageDetail(ctx, sharePage, req.Cookie, douyinMobileUA); detail != nil {
 		log.Printf("[douyin] parse ok aweme_id=%s source=iesdouyin", id)
-		return model.OK("解析成功", formatData(normalizeDetail(detail)))
-	}
-
-	// 方案 2：user/self?modal_id + RENDER_DATA（通常需 cookie）
-	modalPage := endpoints.DouyinUserPageBase + "?modal_id=" + id + "&showTab=like"
-	if detail := p.fetchPageDetail(ctx, modalPage, req.Cookie, douyinUA); detail != nil {
-		log.Printf("[douyin] parse ok aweme_id=%s source=modal_page", id)
 		return model.OK("解析成功", formatData(normalizeDetail(detail)))
 	}
 
@@ -103,6 +107,7 @@ func (p *Parser) fetchPageDetail(ctx context.Context, pageURL, cookie, ua string
 	html := string(body)
 	if strings.Contains(html, "byted_acrawler") || strings.Contains(html, "__ac_signature") {
 		log.Printf("[douyin] page anti-bot challenge url=%q", pageURL)
+		log.Printf("html...................%s", html)
 		return nil
 	}
 	detail := extractJSON(html)
@@ -424,9 +429,6 @@ func pickBestURL(urls []string) string {
 	}
 	if v26 != "" {
 		return strings.ReplaceAll(normalizeV26(v26), "playwm", "play")
-	}
-	if len(urls) > 1 {
-		return strings.ReplaceAll(urls[1], "playwm", "play")
 	}
 	if len(urls) > 0 {
 		return strings.ReplaceAll(urls[0], "playwm", "play")
