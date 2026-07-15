@@ -2,6 +2,7 @@ package douyin
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -26,13 +27,13 @@ func TestExtractJSONFromIesMobileHTML(t *testing.T) {
 }
 
 func TestParseDouyinVideoIntegration(t *testing.T) {
-	if os.Getenv("DOUYIN_INTEGRATION") == "" {
-		t.Skip("set DOUYIN_INTEGRATION=1 to run live test")
-	}
+
 	p := New(httputil.New(30*time.Second), "")
 	resp := p.Parse(context.Background(), parser.Request{
 		URL: "https://www.douyin.com/video/7637471145263910179",
 	})
+
+	fmt.Println("parse douyin video response: ", resp.Data)
 	if resp.Code != 200 {
 		t.Fatalf("parse failed: code=%d msg=%s", resp.Code, resp.Msg)
 	}

@@ -32,8 +32,6 @@ func New(cfg config.Config) (*Server, error) {
 	r.Use(middleware.MaxBodySize(cfg.Security.MaxBodyBytes))
 
 	r.GET("/health", h.Health)
-	r.GET("/", h.Health)
-
 	api := r.Group("/api")
 	if cfg.RateLimit.Enabled {
 		api.Use(middleware.RateLimit(cfg.RateLimit))

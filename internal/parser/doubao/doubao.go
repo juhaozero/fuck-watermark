@@ -53,54 +53,101 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	}
 
 	payload, _ := result["data"].(map[string]any)
-	return model.OK("解析成功", formatDoubaoData(payload, videoID, shareID))
+	return model.OK("解析成功", formatDoubaoData(payload, videoID))
 }
 
-func formatDoubaoData(payload map[string]any, videoID, shareID string) *model.VideoData {
+// 格式化豆包视频数据。
+// payload 结构示例:
+//
+//	play_info.data.{main,backup,definition,poster_url}
+//	user_info.data.{user_id,nickname}
+//	prompt.data (文案)
+//	videoID
+func formatDoubaoData(payload map[string]any, videoID string) *model.VideoData {
 	data := model.NewVideoData(model.PlatformDoubao, model.MediaTypeVideo)
 	data.VideoID = videoID
 	if payload == nil {
 		return data
 	}
+	if vid := pickStr(payload, "videoID", "video_id"); vid != "" {
+		data.VideoID = vid
+	}
 
-	data.Title = pickStr(payload, "title", "video_title", "desc", "description")
-	data.Desc = pickStr(payload, "desc", "description", "video_desc")
-	data.URL = pickStr(payload, "video_url", "play_url", "url", "download_url")
-	data.Cover = pickStr(payload, "cover", "cover_url", "cover_url_list", "poster")
-
-	if info, ok := payload["video_info"].(map[string]any); ok {
-		if data.Title == "" {
-			data.Title = pickStr(info, "title", "desc")
-		}
-		if data.URL == "" {
-			data.URL = pickStr(info, "video_url", "play_url", "url")
-		}
-		if data.Cover == "" {
-			data.Cover = pickStr(info, "cover", "cover_url")
+	if prompt := unwrapData(payload["prompt"]); prompt != nil {
+		if s, ok := prompt.(string); ok {
+			data.Title = s
+			data.Desc = s
 		}
 	}
 
-	if author, ok := payload["author"].(map[string]any); ok {
-		data.Author = model.AuthorOf(pickStr(author, "name", "nickname"), pickStr(author, "id", "uid"), pickStr(author, "avatar", "avatar_url"))
-	} else {
-		data.Author = model.AuthorOf(pickStr(payload, "author_name", "author"), "", pickStr(payload, "author_avatar", "avatar"))
+	if play, ok := asMap(unwrapData(payload["play_info"])); ok {
+		data.URL = pickStr(play, "main", "video_url", "play_url", "url")
+		data.Cover = pickStr(play, "poster_url", "cover", "cover_url")
+		data.Quality = pickStr(play, "definition")
+		if backup := pickStr(play, "backup"); backup != "" {
+			data.VideoBackup = model.BackupsFromURLs(backup)
+		}
 	}
 
-	if data.URL == "" && shareID != "" && videoID != "" {
-		data.URL = fmt.Sprintf("%s/video-sharing?share_id=%s&video_id=%s", endpoints.DoubaoOrigin, shareID, videoID)
+	if user, ok := asMap(unwrapData(payload["user_info"])); ok {
+		data.Author = model.AuthorOf(
+			pickStr(user, "nickname", "user_name", "name"),
+			anyToStr(user["user_id"]),
+			pickStr(user, "avatar", "avatar_url"),
+		)
 	}
+
 	return data
 }
 
+// unwrapData 解包 API 常见的 { "data": T } 包装；若本身已是目标值则原样返回。
+func unwrapData(v any) any {
+	if m, ok := v.(map[string]any); ok {
+		if inner, exists := m["data"]; exists {
+			return inner
+		}
+	}
+	return v
+}
+
+func asMap(v any) (map[string]any, bool) {
+	m, ok := v.(map[string]any)
+	return m, ok
+}
+
 func pickStr(m map[string]any, keys ...string) string {
+	if m == nil {
+		return ""
+	}
 	for _, key := range keys {
-		if v, ok := m[key]; ok {
-			if s, ok := v.(string); ok && s != "" {
-				return s
-			}
+		if s := anyToStr(m[key]); s != "" {
+			return s
 		}
 	}
 	return ""
+}
+
+func anyToStr(v any) string {
+	switch x := v.(type) {
+	case string:
+		return x
+	case float64:
+		// JSON 数字默认 float64，user_id 等需原样转字符串
+		if x == float64(int64(x)) {
+			return fmt.Sprintf("%.0f", x)
+		}
+		return fmt.Sprintf("%v", x)
+	case json.Number:
+		return x.String()
+	case int:
+		return fmt.Sprintf("%d", x)
+	case int64:
+		return fmt.Sprintf("%d", x)
+	case uint64:
+		return fmt.Sprintf("%d", x)
+	default:
+		return ""
+	}
 }
 
 func extractParams(rawURL string) map[string]string {

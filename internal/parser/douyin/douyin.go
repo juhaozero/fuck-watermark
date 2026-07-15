@@ -107,7 +107,6 @@ func (p *Parser) fetchPageDetail(ctx context.Context, pageURL, cookie, ua string
 	html := string(body)
 	if strings.Contains(html, "byted_acrawler") || strings.Contains(html, "__ac_signature") {
 		log.Printf("[douyin] page anti-bot challenge url=%q", pageURL)
-		log.Printf("html...................%s", html)
 		return nil
 	}
 	detail := extractJSON(html)
