@@ -81,6 +81,7 @@ func TestExtractJSONFromIesMobileHTML(t *testing.T) {
 func TestParseDouyinVideoIntegrationDetail(t *testing.T) {
 	ctx := context.Background()
 	rawURL := "https://v.douyin.com/otRCSROwSdc/"
+	// rawURL := "https://www.douyin.com/video/7637471145263910179"
 	p := New(httputil.New(30*time.Second), "")
 	u := rawURL
 	if needsRedirect(u) {
@@ -107,6 +108,7 @@ func TestParseDouyinVideoIntegrationDetail(t *testing.T) {
 func TestParseDouyinVideoIntegrationFormatData(t *testing.T) {
 	ctx := context.Background()
 	rawURL := "https://v.douyin.com/otRCSROwSdc/"
+	//rawURL := "https://www.douyin.com/video/7637471145263910179"
 	p := New(httputil.New(30*time.Second), "")
 	detail := p.Parse(ctx, parser.Request{
 		URL: rawURL,

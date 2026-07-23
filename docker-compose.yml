@@ -7,6 +7,7 @@ services:
       - "9000:9000"
     volumes:
       - ./config.toml:/app/config.toml:ro
+      - fw-logs:/app/logs
     command: [ "-c", "/app/config.toml"]
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9000/health"]
@@ -14,3 +15,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+volumes:
+  fw-logs:

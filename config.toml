@@ -37,7 +37,7 @@ level = "info"
 # 日志级别: debug / info / warn / error
 format = "json"
 # 输出格式: json / console
-log_path = "tmp/logs"
+log_path = "/app/logs"
 filename = "app"
 max_size = 100
 # 单文件最大 MB

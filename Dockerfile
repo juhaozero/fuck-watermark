@@ -24,6 +24,10 @@ WORKDIR /app
 
 COPY --from=builder /out/fuck-watermark /app/fuck-watermark
 
+# 日志目录需在切用户前创建并授权，否则 lumberjack 无法 mkdir
+RUN mkdir -p /app/logs \
+    && chown -R app:app /app
+
 USER app
 
 EXPOSE 8080

@@ -30,7 +30,9 @@ level = "info"
 # 日志级别: debug / info / warn / error
 format = "json"
 # 输出格式: json / console
-log_path = "tmp/logs"
+# Docker 内请用绝对路径 /app/logs（镜像已预创建并授权给 app 用户）
+# 本地开发可用相对路径，例如 "var/logs"
+log_path = "/app/logs"
 filename = "app"
 max_size = 100
 # 单文件最大 MB
