@@ -206,20 +206,26 @@ func formatData(detail map[string]any) *model.VideoData {
 	result := model.NewVideoData(model.PlatformDouyin, model.MediaTypeUnknown)
 	result.Title = desc
 	result.Desc = desc
+	result.VideoID = firstOf(detail, "aweme_id", "group_id_str")
 	result.Author = model.AuthorOf(
 		firstStr(detail, "authorInfo", "nickname", "author", "nickname"),
 		firstAuthorID(detail),
 		firstAuthorAvatar(detail),
 	)
-	// 提取音乐
 	result.Music = extractMusic(detail)
+	result.Stats = extractStats(detail)
+	result.Cover = extractCover(detail)
 
 	if video, ok := detail["video"].(map[string]any); ok {
-		// 提取视频时长
-		result.Duration = video["duration"]
+		if d := num(video["duration"]); d > 0 {
+			// 抖音 aweme 的 video.duration 为毫秒，统一输出秒
+			secs := int(d / 1000)
+			if secs < 1 {
+				secs = 1
+			}
+			result.Duration = secs
+		}
 	}
-
-	result.Cover = extractCover(detail)
 
 	if images := extractImagesList(detail["images"]); len(images) > 0 {
 		result.Type = model.MediaTypeImage
@@ -259,8 +265,11 @@ func formatData(detail map[string]any) *model.VideoData {
 		main, backup := extractHighestQualityVideo(detail)
 		result.URL = main
 		result.VideoBackup = model.BackupsFromURLs(backup...)
-		if video, ok := detail["video"].(map[string]any); ok {
-			result.VideoID = str(video["uri"])
+		result.Quality = qualityFromPlayURL(main)
+		if result.VideoID == "" {
+			if video, ok := detail["video"].(map[string]any); ok {
+				result.VideoID = str(video["uri"])
+			}
 		}
 	}
 
@@ -277,10 +286,9 @@ func extractMusic(detail map[string]any) *model.Music {
 		Title:  firstOf(music, "musicName", "title"),
 		Author: firstOf(music, "ownerNickname", "author"),
 	}
-	if play, ok := music["playUrl"].(map[string]any); ok {
-		m.URL = str(play["uri"])
-	} else if play, ok := music["play_url"].(map[string]any); ok {
-		m.URL = str(play["uri"])
+	m.URL = extractMusicPlayURL(music)
+	if m.URL == "" {
+		m.URL = extractMusicURLFromVideo(detail)
 	}
 	if cover, ok := music["coverThumb"].(map[string]any); ok {
 		if list, ok := cover["urlList"].([]any); ok && len(list) > 0 {
@@ -291,7 +299,86 @@ func extractMusic(detail map[string]any) *model.Music {
 			m.Cover = str(list[0])
 		}
 	}
-	return m
+	return model.MusicOf(m.Title, m.Author, m.URL, m.Cover)
+}
+
+func extractMusicPlayURL(music map[string]any) string {
+	for _, key := range []string{"playUrl", "play_url"} {
+		switch v := music[key].(type) {
+		case string:
+			if v != "" {
+				return v
+			}
+		case map[string]any:
+			if u := str(v["uri"]); u != "" {
+				return u
+			}
+			if list, ok := v["url_list"].([]any); ok && len(list) > 0 {
+				if u := str(list[0]); u != "" {
+					return u
+				}
+			}
+			if list, ok := v["urlList"].([]any); ok && len(list) > 0 {
+				if u := str(list[0]); u != "" {
+					return u
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// extractMusicURLFromVideo 图文笔记常把背景音乐放在 video.play_addr。
+func extractMusicURLFromVideo(detail map[string]any) string {
+	video, ok := detail["video"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	addr, ok := video["play_addr"].(map[string]any)
+	if !ok {
+		addr, _ = video["playAddr"].(map[string]any)
+	}
+	if addr == nil {
+		return ""
+	}
+	if u := str(addr["uri"]); u != "" && (strings.Contains(u, ".mp3") || strings.Contains(u, "ies-music") || strings.HasPrefix(u, "http")) {
+		// uri 直接是可播地址（图文），或 video_id；仅接受 http(s) 直链
+		if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+			return u
+		}
+	}
+	if list, ok := addr["url_list"].([]any); ok {
+		for _, item := range list {
+			u := str(item)
+			if u == "" {
+				continue
+			}
+			if strings.Contains(u, ".mp3") || strings.Contains(u, "ies-music") {
+				return u
+			}
+		}
+	}
+	return ""
+}
+
+func extractStats(detail map[string]any) *model.Stats {
+	raw, ok := detail["statistics"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	stats := &model.Stats{
+		LikeCount:    firstOfNum(raw, "digg_count", "like_count"),
+		PlayCount:    firstOfNum(raw, "play_count"),
+		RepostCount:  firstOfNum(raw, "share_count", "repost_count"),
+		CommentCount: firstOfNum(raw, "comment_count"),
+	}
+	if t := detail["create_time"]; t != nil {
+		stats.PublishedAt = t
+	}
+	if stats.LikeCount == nil && stats.PlayCount == nil && stats.RepostCount == nil && stats.CommentCount == nil && stats.PublishedAt == nil {
+		return nil
+	}
+	return stats
 }
 
 // extractCover 提取封面
@@ -299,7 +386,7 @@ func extractCover(detail map[string]any) string {
 	if video, ok := detail["video"].(map[string]any); ok {
 		for _, path := range []string{"originCover", "origin_cover", "cover", "dynamicCover", "dynamic_cover"} {
 			if c, ok := video[path].(map[string]any); ok {
-				if u := urlFromList(c); u != "" {
+				if u := firstImageURL(c); u != "" {
 					return u
 				}
 			}
@@ -309,7 +396,7 @@ func extractCover(detail map[string]any) string {
 		}
 	}
 	if cover, ok := detail["cover"].(map[string]any); ok {
-		if u := urlFromList(cover); u != "" {
+		if u := firstImageURL(cover); u != "" {
 			return u
 		}
 	}
@@ -329,19 +416,42 @@ func extractImagesList(v any) []any {
 	return nil
 }
 
-// firstImageURL 优先取无水印下载地址，再回退预览地址。
+// firstImageURL 优先无水印地址；ies 分享页 download_url_list 反而带 water。
 func firstImageURL(m map[string]any) string {
 	if m == nil {
 		return ""
 	}
-	for _, key := range []string{"url_list", "download_url_list", "downloadUrlList", "urlList"} {
-		if list, ok := m[key].([]any); ok && len(list) > 0 {
-			if u := str(list[0]); u != "" {
-				return u
+	var candidates []string
+	for _, key := range []string{"download_url_list", "downloadUrlList", "url_list", "urlList"} {
+		list, ok := m[key].([]any)
+		if !ok {
+			continue
+		}
+		for _, item := range list {
+			if u := str(item); u != "" {
+				candidates = append(candidates, u)
 			}
 		}
 	}
-	return urlFromList(m)
+	var noWater []string
+	for _, u := range candidates {
+		if !strings.Contains(u, "water") {
+			noWater = append(noWater, u)
+		}
+	}
+	pool := noWater
+	if len(pool) == 0 {
+		pool = candidates
+	}
+	for _, u := range pool {
+		if strings.Contains(strings.ToLower(u), ".jpeg") || strings.Contains(strings.ToLower(u), ".jpg") {
+			return u
+		}
+	}
+	if len(pool) > 0 {
+		return pool[0]
+	}
+	return ""
 }
 
 // extractLiveVideo 提取动态视频
@@ -452,10 +562,30 @@ func collectURLs(m map[string]any) []string {
 			}
 		}
 	}
+	if addr, ok := m["download_addr"].(map[string]any); ok {
+		if list, ok := addr["url_list"].([]any); ok {
+			for _, u := range list {
+				if s := str(u); s != "" {
+					urls = append(urls, s)
+				}
+			}
+		}
+	}
 	if s := str(m["playApi"]); s != "" {
 		urls = append(urls, s)
 	}
 	return urls
+}
+
+func qualityFromPlayURL(u string) string {
+	if u == "" {
+		return ""
+	}
+	re := regexp.MustCompile(`(?i)(?:ratio|quality)=(\d+p)`)
+	if m := re.FindStringSubmatch(u); len(m) == 2 {
+		return strings.ToLower(m[1])
+	}
+	return ""
 }
 
 // pickBestURL 选择最佳URL
@@ -529,12 +659,23 @@ func firstOf(m map[string]any, keys ...string) string {
 	return ""
 }
 
-// firstStr 提取第一个字符串
+// firstAuthorID 提取作者 ID：uid > short_id > unique_id
 func firstAuthorID(detail map[string]any) string {
-	if id := firstStr(detail, "authorInfo", "uid", "author", "uid"); id != "" {
-		return id
+	for _, path := range []struct{ obj, field string }{
+		{"authorInfo", "uid"},
+		{"author", "uid"},
+		{"authorInfo", "short_id"},
+		{"author", "short_id"},
+		{"authorInfo", "unique_id"},
+		{"author", "unique_id"},
+	} {
+		if sub, ok := detail[path.obj].(map[string]any); ok {
+			if id := str(sub[path.field]); id != "" {
+				return id
+			}
+		}
 	}
-	return firstStr(detail, "authorInfo", "uid", "author", "unique_id")
+	return ""
 }
 
 func firstAuthorAvatar(detail map[string]any) string {
