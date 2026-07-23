@@ -3,12 +3,13 @@ package handler
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
 	"unicode"
+
+	"fuck-watermark/logs"
 
 	"github.com/gin-gonic/gin"
 
@@ -22,7 +23,7 @@ const maxDownloadBytes = 512 << 20 // 512MB
 func (h *Handler) Download(c *gin.Context) {
 	rawURL := strings.TrimSpace(c.Query("url"))
 	if err := urlutil.ValidateParseURL(rawURL); err != nil {
-		log.Printf("[download] invalid url client=%s err=%v", c.ClientIP(), err)
+		logs.Warnf("[下载] 链接无效 客户端=%s 错误=%v", c.ClientIP(), err)
 		c.JSON(http.StatusOK, model.Fail(400, err.Error()))
 		return
 	}
@@ -43,11 +44,11 @@ func (h *Handler) Download(c *gin.Context) {
 		headers["Referer"] = referer
 	}
 
-	log.Printf("[download] start url=%q filename=%q client=%s", rawURL, filename, c.ClientIP())
+	logs.Infof("[下载] 开始 链接=%q 文件名=%q 客户端=%s", rawURL, filename, c.ClientIP())
 
 	resp, err := h.client.Open(c.Request.Context(), rawURL, cookie, headers)
 	if err != nil {
-		log.Printf("[download] upstream failed url=%q err=%v", rawURL, err)
+		logs.Warnf("[下载] 上游请求失败 链接=%q 错误=%v", rawURL, err)
 		c.JSON(http.StatusOK, model.Fail(502, "拉取文件失败"))
 		return
 	}
@@ -55,7 +56,7 @@ func (h *Handler) Download(c *gin.Context) {
 	defer resp.Body.Close()
 
 	if resp.ContentLength > maxDownloadBytes {
-		log.Printf("[download] file too large url=%q size=%d", rawURL, resp.ContentLength)
+		logs.Warnf("[下载] 文件过大 链接=%q 大小=%d", rawURL, resp.ContentLength)
 		c.JSON(http.StatusOK, model.Fail(413, "文件过大"))
 		return
 	}
@@ -74,15 +75,15 @@ func (h *Handler) Download(c *gin.Context) {
 	limited := &io.LimitedReader{R: resp.Body, N: maxDownloadBytes + 1}
 	written, err := io.Copy(c.Writer, limited)
 	if err != nil {
-		log.Printf("[download] stream failed url=%q written=%d err=%v", rawURL, written, err)
+		logs.Warnf("[下载] 传输失败 链接=%q 已写=%d 错误=%v", rawURL, written, err)
 		return
 	}
 	if limited.N == 0 {
-		log.Printf("[download] exceeded max size url=%q written=%d", rawURL, written)
+		logs.Warnf("[下载] 超出大小限制 链接=%q 已写=%d", rawURL, written)
 		return
 	}
 
-	log.Printf("[download] ok url=%q filename=%q bytes=%d", rawURL, filename, written)
+	logs.Infof("[下载] 完成 链接=%q 文件名=%q 字节=%d", rawURL, filename, written)
 }
 
 func sanitizeFilename(name string) string {

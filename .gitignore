@@ -1,6 +1,6 @@
 # Logs
-logs
 *.log
+var/logs/
 node_modules
 dist
 dist-ssr

@@ -1,8 +1,9 @@
 package handler
 
 import (
-	"log"
 	"net/http"
+
+	"fuck-watermark/logs"
 
 	"github.com/gin-gonic/gin"
 
@@ -32,21 +33,21 @@ func (h *Handler) Health(c *gin.Context) {
 func (h *Handler) ParseAuto(c *gin.Context) {
 	req, err := readParseRequest(c)
 	if err != nil {
-		log.Printf("[parse] auto client=%s err=%v", c.ClientIP(), err)
+		logs.Warnf("[解析] 自动识别失败 客户端=%s 错误=%v", c.ClientIP(), err)
 		c.JSON(http.StatusOK, model.Fail(400, err.Error()))
 		return
 	}
 
 	p, ok := h.registry.Match(req.URL)
 	if !ok {
-		log.Printf("[parse] auto platform=unknown url=%q client=%s err=暂不支持该平台链接", req.URL, c.ClientIP())
+		logs.Warnf("[解析] 自动识别失败 平台=未知 链接=%q 客户端=%s 错误=暂不支持该平台链接", req.URL, c.ClientIP())
 		c.JSON(http.StatusOK, model.Fail(400, "暂不支持该平台链接"))
 		return
 	}
 
-	log.Printf("[parse] auto platform=%s url=%q client=%s", p.Name, req.URL, c.ClientIP())
+	logs.Infof("[解析] 自动识别 平台=%s 链接=%q 客户端=%s", p.Name, req.URL, c.ClientIP())
 	resp := p.Parser.Parse(c.Request.Context(), req)
-	log.Printf("[parse] auto platform=%s code=%d msg=%q", p.Name, resp.Code, resp.Msg)
+	logs.Infof("[解析] 自动识别完成 平台=%s 状态码=%d 消息=%q", p.Name, resp.Code, resp.Msg)
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -54,21 +55,21 @@ func (h *Handler) ParsePlatform(name string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		req, err := readParseRequest(c)
 		if err != nil {
-			log.Printf("[parse] platform=%s client=%s err=%v", name, c.ClientIP(), err)
+			logs.Warnf("[解析] 请求无效 平台=%s 客户端=%s 错误=%v", name, c.ClientIP(), err)
 			c.JSON(http.StatusOK, model.Fail(400, err.Error()))
 			return
 		}
 
 		p, ok := h.registry.Get(name)
 		if !ok {
-			log.Printf("[parse] platform=%s url=%q client=%s err=平台未配置", name, req.URL, c.ClientIP())
+			logs.Warnf("[解析] 平台未配置 平台=%s 链接=%q 客户端=%s", name, req.URL, c.ClientIP())
 			c.JSON(http.StatusOK, model.Fail(404, "平台未配置"))
 			return
 		}
 
-		log.Printf("[parse] platform=%s url=%q client=%s", name, req.URL, c.ClientIP())
+		logs.Infof("[解析] 开始 平台=%s 链接=%q 客户端=%s", name, req.URL, c.ClientIP())
 		resp := p.Parser.Parse(c.Request.Context(), req)
-		log.Printf("[parse] platform=%s code=%d msg=%q", name, resp.Code, resp.Msg)
+		logs.Infof("[解析] 完成 平台=%s 状态码=%d 消息=%q", name, resp.Code, resp.Msg)
 		c.JSON(http.StatusOK, resp)
 	}
 }

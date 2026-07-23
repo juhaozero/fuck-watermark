@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+
+	"fuck-watermark/logs"
 
 	"fuck-watermark/internal/endpoints"
 	"fuck-watermark/internal/httputil"
@@ -62,26 +63,26 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 
 	id := extractID(u)
 	if id == "" {
-		log.Printf("[douyin] extract id failed url=%q resolved=%q", rawURL, u)
+		logs.Warnf("[抖音] 提取ID失败 原始链接=%q 解析后=%q", rawURL, u)
 		return model.Fail(400, "链接格式错误，无法提取ID。处理后的链接: "+u)
 	}
-	log.Printf("[douyin] aweme_id=%s url=%q", id, u)
+	logs.Infof("[抖音] 作品ID=%s 链接=%q", id, u)
 	if req.Cookie != "" {
 		// 方案1：user/self?modal_id + RENDER_DATA（通常需 cookie）
 		modalPage := endpoints.DouyinUserPageBase + "?modal_id=" + id + "&showTab=like"
 		if detail := p.fetchPageDetail(ctx, modalPage, req.Cookie, douyinUA); detail != nil {
-			log.Printf("[douyin] parse ok aweme_id=%s source=modal_page ", id)
+			logs.Infof("[抖音] 解析成功 作品ID=%s 来源=个人页弹窗", id)
 			return model.OK("解析成功", formatData(normalizeDetail(detail)))
 		}
 	}
 	// 方案2：iesdouyin 分享页 + _ROUTER_DATA（需移动端 UA）
 	sharePage := endpoints.DouyinIesShareBase + id
 	if detail := p.fetchPageDetail(ctx, sharePage, req.Cookie, douyinMobileUA); detail != nil {
-		log.Printf("[douyin] parse ok aweme_id=%s source=iesdouyin", id)
+		logs.Infof("[抖音] 解析成功 作品ID=%s 来源=分享页", id)
 		return model.OK("解析成功", formatData(normalizeDetail(detail)))
 	}
 
-	log.Printf("[douyin] parse failed aweme_id=%s", id)
+	logs.Warnf("[抖音] 解析失败 作品ID=%s", id)
 	return model.Fail(404, "解析失败，未找到有效内容（可尝试传入 cookie 参数）")
 }
 
@@ -101,17 +102,17 @@ func (p *Parser) fetchPageDetail(ctx context.Context, pageURL, cookie, ua string
 	}
 	body, err := p.client.Get(ctx, pageURL, cookie, douyinHTMLHeaders(referer, ua))
 	if err != nil {
-		log.Printf("[douyin] page request failed url=%q err=%v", pageURL, err)
+		logs.Warnf("[抖音] 页面请求失败 链接=%q 错误=%v", pageURL, err)
 		return nil
 	}
 	html := string(body)
 	if strings.Contains(html, "byted_acrawler") || strings.Contains(html, "__ac_signature") {
-		log.Printf("[douyin] page anti-bot challenge url=%q", pageURL)
+		logs.Warnf("[抖音] 触发反爬验证 链接=%q", pageURL)
 		return nil
 	}
 	detail := extractJSON(html)
 	if detail == nil {
-		log.Printf("[douyin] page no render data url=%q body=%q", pageURL, truncate(html, 256))
+		logs.Warnf("[抖音] 未找到渲染数据 链接=%q 正文=%q", pageURL, truncate(html, 256))
 	}
 	return detail
 }
@@ -220,18 +221,30 @@ func formatData(detail map[string]any) *model.VideoData {
 
 	result.Cover = extractCover(detail)
 
-	if images, ok := detail["images"].([]any); ok && len(images) > 0 {
+	if images := extractImagesList(detail["images"]); len(images) > 0 {
 		result.Type = model.MediaTypeImage
 		for _, img := range images {
 			im, ok := img.(map[string]any)
 			if !ok {
 				continue
 			}
-			imgURL := firstURL(im, "urlList", "url_list")
+			// 部分接口把真实字段包在 item.data 下
+			meta := im
+			if inner, ok := im["data"].(map[string]any); ok {
+				meta = inner
+			}
+			imgURL := firstImageURL(meta)
+			if imgURL == "" {
+				imgURL = firstImageURL(im)
+			}
 			if imgURL != "" {
 				result.Images = append(result.Images, imgURL)
 			}
-			if liveURL := extractLiveVideo(im); liveURL != "" {
+			liveURL := extractLiveVideo(meta)
+			if liveURL == "" {
+				liveURL = extractLiveVideo(im)
+			}
+			if liveURL != "" {
 				result.LivePhoto = append(result.LivePhoto, model.LivePhoto{
 					Image: imgURL,
 					Video: liveURL,
@@ -303,8 +316,39 @@ func extractCover(detail map[string]any) string {
 	return ""
 }
 
+// extractImagesList 兼容 images 为数组，或 { "data": [...] } 包装。
+func extractImagesList(v any) []any {
+	switch x := v.(type) {
+	case []any:
+		return x
+	case map[string]any:
+		if list, ok := x["data"].([]any); ok {
+			return list
+		}
+	}
+	return nil
+}
+
+// firstImageURL 优先取无水印下载地址，再回退预览地址。
+func firstImageURL(m map[string]any) string {
+	if m == nil {
+		return ""
+	}
+	for _, key := range []string{"url_list", "download_url_list", "downloadUrlList", "urlList"} {
+		if list, ok := m[key].([]any); ok && len(list) > 0 {
+			if u := str(list[0]); u != "" {
+				return u
+			}
+		}
+	}
+	return urlFromList(m)
+}
+
 // extractLiveVideo 提取动态视频
 func extractLiveVideo(img map[string]any) string {
+	if img == nil {
+		return ""
+	}
 	video, ok := img["video"].(map[string]any)
 	if !ok {
 		return ""

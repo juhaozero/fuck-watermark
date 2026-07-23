@@ -2,7 +2,8 @@ package server
 
 import (
 	"fmt"
-	"log"
+
+	"fuck-watermark/logs"
 
 	"github.com/gin-gonic/gin"
 
@@ -39,7 +40,7 @@ func New(cfg config.Config) (*Server, error) {
 	if cfg.Security.APIKey != "" {
 		api.Use(middleware.APIKeyAuth(cfg.Security.APIKey))
 	}
-	api.Use(gin.Logger())
+	api.Use(middleware.RequestLogger())
 
 	api.GET("/parse", h.ParseAuto)
 	api.POST("/parse", h.ParseAuto)
@@ -55,7 +56,7 @@ func New(cfg config.Config) (*Server, error) {
 
 func (s *Server) Run() error {
 	addr := fmt.Sprintf(":%d", s.cfg.Addr)
-	log.Printf("API已启动，监听地址：%v", s.cfg.Addr)
+	logs.Infof("API已启动，监听地址：%v", s.cfg.Addr)
 	if err := s.engine.Run(addr); err != nil {
 		return fmt.Errorf("服务启动失败: %w", err)
 	}

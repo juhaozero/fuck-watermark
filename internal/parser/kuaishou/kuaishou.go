@@ -3,9 +3,10 @@ package kuaishou
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"regexp"
 	"strings"
+
+	"fuck-watermark/logs"
 
 	"fuck-watermark/internal/httputil"
 	"fuck-watermark/internal/model"
@@ -55,34 +56,34 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	headers := kuaishouHTMLHeaders()
 	redirectURL, err := p.client.GetFinalURL(ctx, rawURL, headers)
 	if err != nil || redirectURL == "" {
-		log.Printf("[kuaishou] redirect failed url=%q err=%v", rawURL, err)
+		logs.Warnf("[快手] 短链跳转失败 链接=%q 错误=%v", rawURL, err)
 		return model.Fail(400, "无法获取有效链接")
 	}
-	log.Printf("[kuaishou] resolved url=%q final=%q", rawURL, redirectURL)
+	logs.Infof("[快手] 短链已解析 原始=%q 最终=%q", rawURL, redirectURL)
 
 	page, err := p.client.Get(ctx, redirectURL, req.Cookie, headers)
 	if err != nil {
-		log.Printf("[kuaishou] page request failed url=%q err=%v", redirectURL, err)
+		logs.Warnf("[快手] 页面请求失败 链接=%q 错误=%v", redirectURL, err)
 		return model.Fail(500, "页面内容获取失败")
 	}
 
 	contentType, contentID := extractContentIDAndType(redirectURL)
 	if contentID == "" {
-		log.Printf("[kuaishou] unknown content type url=%q", redirectURL)
+		logs.Warnf("[快手] 无法识别内容类型 链接=%q", redirectURL)
 		return model.Fail(400, "无法识别的链接类型")
 	}
-	log.Printf("[kuaishou] content_type=%s content_id=%s", contentType, contentID)
+	logs.Infof("[快手] 内容类型=%s 内容ID=%s", contentType, contentID)
 
 	if result := extractFromInitState(string(page)); result != nil {
-		log.Printf("[kuaishou] parse ok source=init_state content_id=%s", contentID)
+		logs.Infof("[快手] 解析成功 来源=init_state 内容ID=%s", contentID)
 		return *result
 	}
 	if result := extractFromApolloState(string(page), contentID, contentType); result != nil {
-		log.Printf("[kuaishou] parse ok source=apollo_state content_id=%s", contentID)
+		logs.Infof("[快手] 解析成功 来源=apollo_state 内容ID=%s", contentID)
 		return *result
 	}
 
-	log.Printf("[kuaishou] parse failed content_id=%s has_cookie=%v", contentID, req.Cookie != "")
+	logs.Warnf("[快手] 解析失败 内容ID=%s 是否有Cookie=%v", contentID, req.Cookie != "")
 	msg := "未找到有效媒体信息"
 	if req.Cookie == "" {
 		msg += "（建议传入 cookie 参数以提高成功率）"

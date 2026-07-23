@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"fuck-watermark/logs"
 )
 
 const DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -77,14 +78,14 @@ func (c *Client) Do(ctx context.Context, url string, opts RequestOptions) ([]byt
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("[http] request failed method=%s url=%q err=%v", method, url, err)
+		logs.Warnf("[HTTP] 请求失败 方法=%s 链接=%q 错误=%v", method, url, err)
 		return nil, "", err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("[http] read body failed method=%s url=%q status=%d err=%v", method, url, resp.StatusCode, err)
+		logs.Warnf("[HTTP] 读取响应失败 方法=%s 链接=%q 状态码=%d 错误=%v", method, url, resp.StatusCode, err)
 		return nil, "", err
 	}
 
@@ -94,7 +95,7 @@ func (c *Client) Do(ctx context.Context, url string, opts RequestOptions) ([]byt
 	}
 
 	if resp.StatusCode >= 400 && !opts.NoRedirect {
-		log.Printf("[http] bad status method=%s url=%q status=%d final_url=%q body=%q", method, url, resp.StatusCode, finalURL, truncateBody(body))
+		logs.Warnf("[HTTP] 异常状态码 方法=%s 链接=%q 状态码=%d 最终链接=%q 正文=%q", method, url, resp.StatusCode, finalURL, truncateBody(body))
 		return body, finalURL, fmt.Errorf("http status %d", resp.StatusCode)
 	}
 
@@ -136,12 +137,12 @@ func (c *Client) Open(ctx context.Context, rawURL string, cookie string, headers
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		log.Printf("[http] open failed url=%q err=%v", rawURL, err)
+		logs.Warnf("[HTTP] 打开资源失败 链接=%q 错误=%v", rawURL, err)
 		return nil, err
 	}
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
-		log.Printf("[http] open bad status url=%q status=%d", rawURL, resp.StatusCode)
+		logs.Warnf("[HTTP] 打开资源状态异常 链接=%q 状态码=%d", rawURL, resp.StatusCode)
 		return nil, fmt.Errorf("http status %d", resp.StatusCode)
 	}
 	return resp, nil
@@ -162,21 +163,21 @@ func (c *Client) GetFinalURL(ctx context.Context, url string, headers ...map[str
 		Headers: h,
 	})
 	if err != nil && !redirectResolved(url, finalURL) {
-		log.Printf("[http] head redirect failed url=%q err=%v, fallback to GET", url, err)
+		logs.Warnf("[HTTP] HEAD跳转失败 链接=%q 错误=%v，改用GET", url, err)
 		_, finalURL, err = c.Do(ctx, url, RequestOptions{
 			Method:  http.MethodGet,
 			Headers: h,
 		})
 	}
 	if err != nil && redirectResolved(url, finalURL) {
-		log.Printf("[http] get final url ok after redirect url=%q final=%q (ignored err=%v)", url, finalURL, err)
+		logs.Infof("[HTTP] 最终地址已解析(忽略错误) 原始=%q 最终=%q 错误=%v", url, finalURL, err)
 		return finalURL, nil
 	}
 	if err != nil {
-		log.Printf("[http] get final url failed url=%q err=%v", url, err)
+		logs.Warnf("[HTTP] 获取最终地址失败 链接=%q 错误=%v", url, err)
 		return finalURL, err
 	}
-	log.Printf("[http] get final url ok url=%q final=%q", url, finalURL)
+	logs.Infof("[HTTP] 最终地址已解析 原始=%q 最终=%q", url, finalURL)
 	return finalURL, nil
 }
 

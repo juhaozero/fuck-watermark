@@ -31,3 +31,18 @@ requests_per_minute = 60
 # 每分钟请求数
 burst = 10
 # 突发请求数
+
+[log]
+level = "info"
+# 日志级别: debug / info / warn / error
+format = "json"
+# 输出格式: json / console
+log_path = "tmp/logs"
+filename = "app"
+max_size = 100
+# 单文件最大 MB
+max_backups = 10
+max_age = 30
+compress = true
+console = true
+is_debug = false

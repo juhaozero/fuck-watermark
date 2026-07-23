@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/url"
 	"strings"
 	"time"
+
+	"fuck-watermark/logs"
 
 	"fuck-watermark/internal/endpoints"
 	"fuck-watermark/internal/httputil"
@@ -44,10 +45,10 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	u := cleanURL(rawURL)
 	bvid, err := p.extractBVID(ctx, u)
 	if err != nil || bvid == "" {
-		log.Printf("[bilibili] extract bvid failed url=%q err=%v", u, err)
+		logs.Warnf("[B站] 提取BV号失败 链接=%q 错误=%v", u, err)
 		return model.Fail(400, "视频链接好像不太对！")
 	}
-	log.Printf("[bilibili] bvid=%s url=%q", bvid, u)
+	logs.Infof("[B站] BV号=%s 链接=%q", bvid, u)
 
 	// 获取视频信息
 	viewBody, err := p.client.Get(ctx, endpoints.BilibiliViewAPI+"?bvid="+bvid, req.Cookie, map[string]string{
@@ -55,7 +56,7 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 		"User-Agent":   p.ua,
 	})
 	if err != nil {
-		log.Printf("[bilibili] view api request failed bvid=%s err=%v", bvid, err)
+		logs.Warnf("[B站] 详情接口请求失败 BV号=%s 错误=%v", bvid, err)
 		return model.Fail(500, "请求B站接口失败")
 	}
 
@@ -77,10 +78,10 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 		} `json:"data"`
 	}
 	if json.Unmarshal(viewBody, &viewResp) != nil || viewResp.Code != 0 {
-		log.Printf("[bilibili] view api parse failed bvid=%s api_code=%d body=%q", bvid, viewResp.Code, truncate(string(viewBody), 256))
+		logs.Warnf("[B站] 详情接口解析失败 BV号=%s 接口码=%d 正文=%q", bvid, viewResp.Code, truncate(string(viewBody), 256))
 		return model.Fail(404, "解析失败！")
 	}
-	log.Printf("[bilibili] view api ok bvid=%s title=%q pages=%d", bvid, viewResp.Data.Title, len(viewResp.Data.Pages))
+	logs.Infof("[B站] 详情接口成功 BV号=%s 标题=%q 分P数=%d", bvid, viewResp.Data.Title, len(viewResp.Data.Pages))
 
 	// 获取视频分P信息
 	var parts []videoPart
@@ -95,7 +96,7 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 			"User-Agent":   p.ua,
 		})
 		if err != nil {
-			log.Printf("[bilibili] playurl request failed bvid=%s cid=%d index=%d err=%v", bvid, page.Cid, i+1, err)
+			logs.Warnf("[B站] 播放地址请求失败 BV号=%s cid=%d 分P=%d 错误=%v", bvid, page.Cid, i+1, err)
 			continue
 		}
 
@@ -107,7 +108,7 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 			} `json:"data"`
 		}
 		if json.Unmarshal(playBody, &playResp) != nil || len(playResp.Data.Durl) == 0 {
-			log.Printf("[bilibili] playurl parse failed bvid=%s cid=%d index=%d body=%q", bvid, page.Cid, i+1, truncate(string(playBody), 256))
+			logs.Warnf("[B站] 播放地址解析失败 BV号=%s cid=%d 分P=%d 正文=%q", bvid, page.Cid, i+1, truncate(string(playBody), 256))
 			continue
 		}
 
@@ -131,10 +132,10 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	}
 
 	if len(parts) == 0 {
-		log.Printf("[bilibili] no playable parts bvid=%s total_pages=%d", bvid, len(viewResp.Data.Pages))
+		logs.Warnf("[B站] 无可播放分P BV号=%s 总分P=%d", bvid, len(viewResp.Data.Pages))
 		return model.Fail(404, "解析失败！")
 	}
-	log.Printf("[bilibili] parse ok bvid=%s parts=%d", bvid, len(parts))
+	logs.Infof("[B站] 解析成功 BV号=%s 分P数=%d", bvid, len(parts))
 
 	modelParts := make([]model.VideoPart, len(parts))
 	for i, part := range parts {
@@ -172,19 +173,19 @@ func (p *Parser) extractBVID(ctx context.Context, rawURL string) (string, error)
 
 	// 短链接处理
 	if host == "b23.tv" || strings.HasSuffix(host, ".b23.tv") {
-		log.Printf("[bilibili] resolving short url=%q host=%q", rawURL, host)
+		logs.Infof("[B站] 正在解析短链 链接=%q 域名=%q", rawURL, host)
 		final, err := p.client.HeadRedirect(ctx, rawURL, map[string]string{
 			"User-Agent": p.ua,
 		})
 		if err != nil || final == "" || final == rawURL {
-			log.Printf("[bilibili] head redirect unavailable url=%q err=%v, fallback to GetFinalURL", rawURL, err)
+			logs.Infof("[B站] HEAD跳转不可用 链接=%q 错误=%v，改用GET最终地址", rawURL, err)
 			final, err = p.client.GetFinalURL(ctx, rawURL)
 		}
 		if err != nil {
-			log.Printf("[bilibili] short url resolve failed url=%q err=%v", rawURL, err)
+			logs.Warnf("[B站] 短链解析失败 链接=%q 错误=%v", rawURL, err)
 			return "", err
 		}
-		log.Printf("[bilibili] short url resolved url=%q final=%q", rawURL, final)
+		logs.Infof("[B站] 短链已解析 原始=%q 最终=%q", rawURL, final)
 		parsed, err = url.Parse(final)
 		if err != nil {
 			return "", err
@@ -193,7 +194,7 @@ func (p *Parser) extractBVID(ctx context.Context, rawURL string) (string, error)
 	}
 
 	if !strings.Contains(path, "/video/") {
-		log.Printf("[bilibili] not a video path url=%q path=%q", rawURL, path)
+		logs.Warnf("[B站] 非视频路径 链接=%q 路径=%q", rawURL, path)
 		return "", fmt.Errorf("not a video path")
 	}
 	return strings.TrimPrefix(path, "/video/"), nil
