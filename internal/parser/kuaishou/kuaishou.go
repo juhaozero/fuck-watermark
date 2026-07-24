@@ -84,7 +84,7 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	}
 
 	logs.Warnf("[快手] 解析失败 内容ID=%s 是否有Cookie=%v", contentID, req.Cookie != "")
-	msg := "未找到有效媒体信息"
+	msg := "解析失败！请检查链接是否正确或视频是否存在！内容ID=" + contentID
 	if req.Cookie == "" {
 		msg += "（建议传入 cookie 参数以提高成功率）"
 	}

@@ -79,7 +79,7 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	}
 	if json.Unmarshal(viewBody, &viewResp) != nil || viewResp.Code != 0 {
 		logs.Warnf("[B站] 详情接口解析失败 BV号=%s 接口码=%d 正文=%q", bvid, viewResp.Code, truncate(string(viewBody), 256))
-		return model.Fail(404, "解析失败！")
+		return model.Fail(404, "解析失败！请检查链接是否正确或视频是否存在！BV号="+bvid)
 	}
 	logs.Infof("[B站] 详情接口成功 BV号=%s 标题=%q 分P数=%d", bvid, viewResp.Data.Title, len(viewResp.Data.Pages))
 

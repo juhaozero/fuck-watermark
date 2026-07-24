@@ -83,7 +83,11 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	}
 
 	logs.Warnf("[抖音] 解析失败 作品ID=%s", id)
-	return model.Fail(404, "解析失败，未找到有效内容（可尝试传入 cookie 参数）")
+	msg := "解析失败！请检查链接是否正确或视频是否存在！作品ID=" + id
+	if req.Cookie == "" {
+		msg += "（建议传入 cookie 参数以提高成功率）"
+	}
+	return model.Fail(404, msg)
 }
 
 func douyinHTMLHeaders(referer, ua string) map[string]string {

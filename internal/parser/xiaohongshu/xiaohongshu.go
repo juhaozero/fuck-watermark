@@ -85,7 +85,7 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 	}
 
 	if data == nil {
-		return model.Fail(404, "解析失败，未找到有效内容")
+		return model.Fail(404, "解析失败！请检查链接是否正确或视频是否存在！ID="+id)
 	}
 	return model.OK("解析成功", data)
 }

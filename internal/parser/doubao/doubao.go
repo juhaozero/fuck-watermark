@@ -49,7 +49,7 @@ func (p *Parser) Parse(ctx context.Context, req parser.Request) model.Response {
 
 	code, _ := result["code"].(float64)
 	if int(code) != 0 {
-		return model.Fail(500, "解析失败: API返回错误")
+		return model.Fail(500, "解析失败: API返回错误！code="+fmt.Sprintf("%d", int(code))+" share_id="+shareID+" video_id="+videoID)
 	}
 
 	payload, _ := result["data"].(map[string]any)

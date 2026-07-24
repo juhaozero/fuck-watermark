@@ -100,7 +100,7 @@ func (p *Parser) fetchVideoInfo(ctx context.Context, videoID, cookie string) mod
 
 	info := resp.Data.PlayInfo
 	if resp.Code != 100000 || info == nil {
-		msg := "解析失败,当前链接中的视频不存在。"
+		msg := "解析失败！请检查链接是否正确或视频是否存在！视频ID=" + videoID
 		if resp.Code == 0 {
 			msg = "当前官方接口已失效！"
 		} else if resp.Code != 100000 {
